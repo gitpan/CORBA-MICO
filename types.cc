@@ -1,6 +1,7 @@
 /* -*- mode: C++; c-file-style: "bsd" -*- */
 
 #include "pmico.h"
+#include "exttypes.h"
 
 // A table connecting CORBA::Object_ptr's to the surrogate or real
 // Perl object. We store the objects here as IV's, not as SV's,
@@ -86,11 +87,13 @@ pmico_instvars_get (SV *perlobj)
     
     if (SvROK(perlobj))
 	perlobj = SvRV(perlobj);
+
+    if (SvMAGICAL (perlobj)) {
+        MAGIC *mg = mg_find (perlobj, '~');
     
-    MAGIC *mg = mg_find (perlobj, '~');
-    
-    if (mg)
-	iv = (PMicoInstVars *)SvPVX(mg->mg_obj);
+        if (mg)
+	    iv = (PMicoInstVars *)SvPVX(mg->mg_obj);
+    }
 
     if (iv && (iv->magic == instvars_magic))
 	return iv;
@@ -130,6 +133,7 @@ pmico_init_obj (SV *perlobj,
 		const char *repoid) 
 {
     PMicoInstVars *iv = pmico_instvars_get (perlobj);
+    CORBA::ImplementationDef_var implementation = CORBA::ImplementationDef::_duplicate(impl);
 
     if (!iv) {
 	iv = pmico_instvars_add (perlobj);
@@ -152,22 +156,18 @@ pmico_init_obj (SV *perlobj,
 	else
 	    rd = new CORBA::BOA::ReferenceData;
 
-	if (!impl)
-	    impl = iv->trueobj->_find_impl (iv->repoid->c_str(), info->desc->name);
-	else
-	    impl = CORBA::ImplementationDef::_duplicate (impl);
+	if (!implementation)
+	    implementation = iv->trueobj->_find_impl (iv->repoid->c_str(), info->desc->name);
 
-	assert ( !CORBA::is_nil (impl) );
+	assert ( !CORBA::is_nil (implementation) );
 
 	if (!iface)
-	    iface = CORBA::InterfaceDef::_duplicate (info->iface);
-	else
-	    iface = CORBA::InterfaceDef::_duplicate (iface);
+	    iface = info->iface;
 	
 	if (o)
-	    iv->trueobj->_restore_ref (o, *rd, iface, impl);
+	    iv->trueobj->_restore_ref (o, *rd, iface, implementation);
 	else
-	    iv->trueobj->_create_ref (*rd, iface, impl, repoid);
+	    iv->trueobj->_create_ref (*rd, iface, implementation, repoid);
 
 	if (rd != refdata)
 	    delete rd;
@@ -433,6 +433,33 @@ sequence_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 }
 
 static bool
+array_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    CORBA::ULong len = tc->length();
+    CORBA::TypeCode_var content_tc = tc->content_type();
+
+    if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVAV)) {
+	warn("Array argument must be array reference");
+	return FALSE;
+    }
+
+    AV *av = (AV *)SvRV(sv);
+
+    if (av_len(av)+1 != len) {
+	warn("Array argument should be of length %d, is %d", len, av_len(av)+1);
+	return FALSE;
+    }
+	
+    if (!res->array_put_begin()) return FALSE;
+
+    for (CORBA::ULong i = 0 ; i < len ; i++)
+	if (!sv_to_any (res, content_tc, *av_fetch(av, i, 0))) 
+	    return FALSE;
+
+    return res->array_put_end();
+}
+
+static bool
 except_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     SV **svp;
@@ -594,6 +621,104 @@ alias_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     return sv_to_any (res, t, sv);
 }
 
+static bool
+string_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    return (*res <<= CORBA::Any::from_string(SvPV(sv, na), tc->length(), FALSE));
+}
+
+static bool
+longlong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    return (*res <<= SvLLV (sv));
+}
+
+static bool
+ulonglong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    return (*res <<= SvULLV (sv));
+}
+
+static bool
+longdouble_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    return (*res <<= SvLDV (sv));
+}
+
+static bool
+fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    int digits = tc->fixed_digits();
+    FixedBase::FixedValue val (digits+1);
+    int count;
+    STRLEN len;
+    char *str;
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    if (!sv_isa (sv, "CORBA::Fixed"))
+      {
+	PUSHMARK(sp);
+	XPUSHs(sv_2mortal (newSVpv ("CORBA::Fixed", 0)));
+	XPUSHs(sv);
+	PUTBACK;
+
+	count = perl_call_method("from_string", G_SCALAR);
+
+	SPAGAIN;
+	
+	if (count != 1) {
+	   warn ("CORBA::Fixed::from_string returned %d items", count);
+	   while (count--)
+	     (void)POPs;
+
+	   PUTBACK;
+	   return FALSE;
+	}
+
+	sv = POPs;
+
+	PUTBACK;
+      }
+
+    PUSHMARK(sp);
+    XPUSHs(sv);
+    XPUSHs(sv_2mortal (newSViv (digits)));
+    XPUSHs(sv_2mortal (newSViv (tc->fixed_scale())));
+    PUTBACK;
+
+    count = perl_call_method("to_digits", G_SCALAR);
+
+    SPAGAIN;
+    
+    if (count != 1) {
+      warn ("CORBA::Fixed::to_digits returned %d items", count);
+      while (count--)
+	(void)POPs;
+
+      PUTBACK;
+      return FALSE;
+    }
+    
+    sv = POPs;
+
+    str = SvPV(sv,len);
+
+    if (len != digits + 1) {
+      warn ("CORBA::Fixed::to_digits return wrong number of digits!\n");
+      return FALSE;
+    }
+
+    val.length (digits+1);
+    val[digits] = (str[0] == '-');
+    for (int i = 0 ; i < digits ; i++)
+      val[i] = str[i+1] - '0';
+    
+    return (*res <<= CORBA::Any::from_fixed (val, digits, tc->fixed_scale()));
+}
+
 static bool 
 sv_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
@@ -635,10 +760,22 @@ sv_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	return any_to_any (res, tc, sv);
     case CORBA::tk_alias:
 	return alias_to_any (res, tc, sv);
+    case CORBA::tk_string:
+	return string_to_any (res, tc, sv);
+    case CORBA::tk_array:
+	return array_to_any (res, tc, sv);
+    case CORBA::tk_longlong:
+	return longlong_to_any (res, tc, sv);
+    case CORBA::tk_ulonglong:
+	return ulonglong_to_any (res, tc, sv);
+    case CORBA::tk_longdouble:
+	return longdouble_to_any (res, tc, sv);
+    case CORBA::tk_fixed:
+	return fixed_to_any (res, tc, sv);
+    case CORBA::tk_wchar:
+    case CORBA::tk_wstring:
     case CORBA::tk_TypeCode:
     case CORBA::tk_Principal:
-    case CORBA::tk_string:
-    case CORBA::tk_array:
     case CORBA::tk_recursive:
 	warn ("Unsupported output typecode %d\n", tc->kind());
 	return FALSE;
@@ -779,7 +916,8 @@ sequence_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 
     CORBA::TypeCode_var content_tc = tc->content_type();
     
-    if (!any->seq_get_begin(len)) goto error;
+    if (!any->seq_get_begin(len))
+	return NULL;
 
     // FIXME: Check the length of the typecode
     
@@ -810,6 +948,35 @@ sequence_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     }
 
     if (any->seq_get_end())
+	return res;
+
+ error:
+    SvREFCNT_dec (res);
+    return NULL;
+}
+
+static SV *
+array_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    SV *res;
+
+    CORBA::TypeCode_var content_tc = tc->content_type();
+    CORBA::ULong len = tc->length();
+    
+    if (!any->array_get_begin())
+	return NULL;
+
+    AV *av = newAV();
+    av_extend(av, len);
+    res = newRV_noinc((SV *)av);
+    for (CORBA::ULong i = 0 ; i < len ; i++) {
+	SV *elem = sv_from_any (any, content_tc);
+	if (!elem)
+	    goto error;
+	av_store (av, i, elem);
+    }
+
+    if (any->array_get_end())
 	return res;
 
  error:
@@ -924,6 +1091,106 @@ alias_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 }
 
 static SV *
+string_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    char *result;
+    SV *sv = NULL;
+
+    if (*any >>= CORBA::Any::to_string (result, tc->length())) {
+	sv = newSVpv (result, 0);
+	CORBA::string_free (result);
+    }
+    
+    return sv;
+}
+
+static SV *
+longlong_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    SV *sv = NULL;
+    CORBA::LongLong result;
+
+    if (*any >>= result) {
+	sv = ll_from_longlong (result);
+    }
+    
+    return sv;
+}
+
+static SV *
+ulonglong_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    SV *sv = NULL;
+    CORBA::ULongLong result;
+
+    if (*any >>= result) {
+	sv = ull_from_ulonglong (result);
+    }
+    
+    return sv;
+}
+
+static SV *
+longdouble_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    SV *sv = NULL;
+    CORBA::LongDouble result;
+
+    if (*any >>= result) {
+	sv = ld_from_longdouble (result);
+    }
+    
+    return sv;
+}
+
+static SV *
+fixed_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    FixedBase::FixedValue_var v;
+    CORBA::UShort digits = tc->fixed_digits();
+    CORBA::Short scale = tc->fixed_scale();
+
+    SV *sv = NULL;
+
+    if (*any >>= CORBA::Any::to_fixed (v, digits, scale)) {
+
+	int i;
+	SV *tsv = newSV(digits+1);
+	SvCUR_set (tsv, digits+1);
+	SvPVX(tsv)[0] = (*v)[digits] ? '-' : '+';
+	for (i = 0 ; i < digits ; i++)
+	    SvPVX(tsv)[i+1] = '0' + (*v)[i];
+	SvPVX(tsv)[i+1] = '\0';
+	SvPOK_on(tsv);
+
+	dSP;
+	PUSHMARK(sp);
+	XPUSHs (sv_2mortal (newSVpv ("CORBA::Fixed", 0)));
+	XPUSHs (sv_2mortal (tsv));
+	XPUSHs (sv_2mortal (newSViv(scale)));
+	PUTBACK;
+
+	int count = perl_call_method("new", G_SCALAR);
+
+	SPAGAIN;
+	
+	if (count != 1) {
+	   warn ("CORBA::Fixed::new returned %d items", count);
+	   while (count--)
+	     (void)POPs;
+
+	   return NULL;
+	}
+
+	sv = newSVsv(POPs);
+
+	PUTBACK;
+    }
+    
+    return sv;
+}
+
+static SV *
 sv_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     switch (tc->kind()) {
@@ -965,10 +1232,22 @@ sv_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
         return any_from_any (any, tc);
     case CORBA::tk_alias:
         return alias_from_any (any, tc);
+    case CORBA::tk_string:
+	return string_from_any (any, tc);
+    case CORBA::tk_array:
+	return array_from_any (any, tc);
+    case CORBA::tk_longlong:
+	return longlong_from_any (any, tc);
+    case CORBA::tk_ulonglong:
+	return ulonglong_from_any (any, tc);
+    case CORBA::tk_longdouble:
+	return longdouble_from_any (any, tc);
+    case CORBA::tk_fixed:
+	return fixed_from_any (any, tc);
+    case CORBA::tk_wchar:
+    case CORBA::tk_wstring:
     case CORBA::tk_TypeCode:
     case CORBA::tk_Principal:
-    case CORBA::tk_string:
-    case CORBA::tk_array:
     case CORBA::tk_recursive:
 	return NULL;
     }

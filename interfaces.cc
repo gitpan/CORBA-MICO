@@ -152,7 +152,9 @@ XS(_pmico_callStub)
 	    case CORBA::PARAM_IN:
 		argany = &req->add_in_arg ( opr->parameters[i].name );
 		argany->type ( opr->parameters[i].type );
-		pmico_to_any ( argany , arg );
+		if (!pmico_to_any ( argany , arg ))
+		    croak ("Error marshalling parameter '%s'",
+			   (char *)opr->parameters[i].name);
 		j++;
 		break;
 	    case CORBA::PARAM_INOUT:
@@ -160,7 +162,9 @@ XS(_pmico_callStub)
 		    croak ("INOUT parameter must be a reference");
 		argany = &req->add_in_arg ( opr->parameters[i].name );
 		argany->type ( opr->parameters[i].type );
-		pmico_to_any ( argany , SvRV(arg) );
+		if (!pmico_to_any ( argany , SvRV(arg) ))
+		    croak ("Error marshalling parameter '%s'",
+			   (char *)opr->parameters[i].name);
 		j++;
 		break;
 	    case CORBA::PARAM_OUT:
@@ -181,7 +185,8 @@ XS(_pmico_callStub)
 
 	CORBA::Any *argany = &req->add_in_arg( "_value" );
 	argany->type ( desc->attributes[index-SETTER_BASE].type );
-	pmico_to_any (argany, ST(1));
+	if (!pmico_to_any (argany, ST(1)))
+	    croak ("Error marshalling attribute value");
 
 	req->result()->value()->type ( CORBA::_tc_void );
     }
@@ -265,7 +270,7 @@ define_exception (const char *repoid)
 	return;
 
     CORBA::String_var pack = 
-	iface_repository->lookup_id (repoid)->absolute_name();
+	iface_repository->lookup_id ((char *)repoid)->absolute_name();
 
     char *pkg = pack;
     if (!strncmp(pkg, "::", 2))
@@ -316,7 +321,7 @@ pmico_load_interface (CORBA::InterfaceDef *_iface, CORBA::ORB_ptr _orb,
     if (iface == NULL) {
 	ensure_iface_repository (_orb);
 	
-	CORBA::Contained_var o = iface_repository->lookup_id(id);
+	CORBA::Contained_var o = iface_repository->lookup_id((char *)id);
 	iface = CORBA::InterfaceDef::_narrow (o);
 	
 	if (iface == NULL)
@@ -394,6 +399,9 @@ static HV *typecode_cache;
 SV *
 store_typecode (const char *id, CORBA::TypeCode_ptr tc)
 {
+    if (!typecode_cache)
+	typecode_cache = newHV();
+
     SV *res = newSV(0);
 
     sv_setref_pv (res, "CORBA::TypeCode", (void *)tc);
@@ -413,7 +421,7 @@ pmico_lookup_typecode (const char *id)
     if (!svp) {
 	ensure_iface_repository (NULL);
 
-	CORBA::Contained_var c = iface_repository->lookup_id (id);
+	CORBA::Contained_var c = iface_repository->lookup_id ((char *)id);
 	CORBA::IDLType_var t = CORBA::IDLType::_narrow(c);
 	
 	if (CORBA::is_nil(t))

@@ -2,16 +2,21 @@
 
 use CORBA::MICO ids => [ 'IDL:Account/Account:1.0' => undef,
 			 'IDL:Account/AcctCounter:1.0' => undef ];
+use CORBA::MICO::LongLong;
 
-package MyCounter;
-
-@MyCounter::ISA = qw(Account::AcctCounter);
+#print "$$\n";
+#sleep 5;
 
 my %counters = ();
+my @servers;
+
+package PlainCounter;
 
 sub new {
+    my $class = shift;
+
     my $count = 0;
-    my $self = bless \$count;
+    my $self = bless \$count, $class;
     $counters{$self} = $self;
 
     $self;
@@ -27,19 +32,27 @@ sub destroy {
     delete $counters{$self};
 }
 
+package MyCounter;
+
+@MyCounter::ISA = qw(PlainCounter Account::AcctCounter);
+
 package MyAccount;
+
+use Data::Dumper;
 
 @MyAccount::ISA = qw(Account::Account);
 
 sub new {
     my ($class) = @_;
     my $self = bless {}, $class;
-      
+
     $self->{current_balance} = 0;
     $self->{prefs} = {
 		      favorite_color => 'burgundy',
-		      lottery_numbers => [ 1, 2, 3, 4]
+		      lottery_numbers => [ 1, 2, 3, 4],
+		      nickname => 'Sneezy'
 		     };
+    $self->{appearance} = [ map { [ (0..9) ] } 0..5 ];
 
     $self;
 }
@@ -52,6 +65,8 @@ sub set_pref {
 	$self->{prefs}->{favorite_color} = $v;
     } elsif ($d eq "pt_lotnum") {
 	$self->{prefs}->{lottery_numbers} = $v;
+    } elsif ($d eq "pt_nickname") {
+	$self->{prefs}->{nickname} = $v;
     }
 }
 
@@ -62,6 +77,8 @@ sub get_pref {
 	return [$d, $self->{prefs}->{favorite_color}];
     } elsif ($d eq "pt_lotnum") {
 	return [$d, $self->{prefs}->{lottery_numbers}];
+    } elsif ($d eq "pt_nickname") {
+	return [$d, $self->{prefs}->{nickname}];
     }
 }
 
@@ -74,6 +91,9 @@ sub get_pref_any {
     } elsif ($d eq "pt_lotnum") {
 	return new CORBA::Any (CORBA::TypeCode->new('IDL:Account/Account/numbers:1.0'),
 			       $self->{prefs}->{lottery_numbers});
+    } elsif ($d eq "pt_nickname") {
+	return new CORBA::Any (CORBA::TypeCode->new('IDL:CORBA/String:1.0'),
+			       $self->{prefs}->{nickname});
     }
 }
 
@@ -84,6 +104,7 @@ sub deposit {
 
 sub withdraw {
     my ($self,$amount) = @_;
+    
     if ($amount > $self->{current_balance}) {
 	throw Account::Account::InsufficientFunds
 	    overdraft => $amount - $self->{current_balance};
@@ -92,12 +113,50 @@ sub withdraw {
     }
 }
 
-sub balance { 
-    $_[0]->{current_balance} 
+sub balance {
+    $_[0]->{current_balance}
 };
 
 sub counter {
-    return new MyCounter;
+    new MyCounter;
+}
+
+sub add {
+    my ($self, $a, $b) = @_;
+    $a+$b;
+}
+
+sub _save_object {
+    my $self = shift;
+
+    my $ifile = $self->_ident;
+    open (IDENT, ">$ifile") ||
+	die "Cannot open object save file '$ifile': $!";
+    print IDENT Dumper ($self);
+    close IDENT;
+}
+
+sub restore {
+    my ($class,$object) = @_;
+
+    my $ifile = $object->_ident;
+    open (IDENT, "<$ifile") ||
+	die "Cannot open object save file '$ifile': $!";
+    undef local $/;
+    my $self = eval scalar (<IDENT>);
+    close IDENT;
+
+    $self->_restore ($object);
+
+    push @servers, $self;
+
+    1;
+}
+
+sub server_exit {
+    my $self = shift;
+
+    $self->_boa->deactivate_impl (undef);
 }
 
 # Possible alternative mapping
@@ -108,8 +167,17 @@ sub counter {
 #    $self->{prefs} = $val;
 #}
 
-sub _get_prefs { 
-    $_[0]->{prefs}; 
+sub _set_appearance {
+    my ($self,$a) = @_;
+    $self->{appearance} = $a;
+}
+
+sub _get_appearance {
+    $_[0]->{appearance};
+}
+
+sub _get_prefs {
+    $_[0]->{prefs};
 }
 
 sub _set_prefs {
@@ -119,14 +187,24 @@ sub _set_prefs {
 
 package main;
 
+my $restorer = new CORBA::BOAObjectRestorer;
+
+$restorer->add_restorers ('IDL:Account/Account:1.0' =>
+			      sub { MyAccount->restore(shift) });
+
 $orb = CORBA::ORB_init("mico-local-orb");
 $boa = $orb->BOA_init("mico-local-boa");
 
 $server = new MyAccount;
 $ref = $orb->object_to_string ($server);
 
+push @servers, $server;
+
 open (OUT, ">account.ref");
 print OUT "$ref";
 close OUT;
 
 $boa->impl_is_ready ( undef );
+$orb->run ();
+
+exit (0);

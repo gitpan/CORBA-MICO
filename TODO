@@ -14,3 +14,16 @@
 
 - Globally remove all the damn (char *) casts when passing const
   char *'s into Perl functions and do something better.
+
+- The conversions functions in exttypes.cc are pretty cheesy.
+  They should use C library functions when available. (In particular
+  for LongDouble, where the last bit tends to be wrong)
+
+- Optimize CORBA::MICO::Fixed.
+
+- A test suite.
+
+- Create the temporary files for the examples in /tmp
+
+
+  

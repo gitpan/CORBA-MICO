@@ -83,6 +83,14 @@ PMicoInstVars *   pmico_instvars_get     (SV            *perl_obj);
 // Given a Perl object which is a descendant of CORBA::Object, find
 // or create the corresponding C++ CORBA::Object
 CORBA::Object_ptr pmico_sv_to_obj        (SV            *perl_obj);
+// Initialize a true Perl object. All arguments other than perlobj are
+// optional
+PMicoInstVars *   pmico_init_obj         (SV                        *perlobj, 
+					  CORBA::Object             *o, 
+					  CORBA::BOA::ReferenceData *refdata,
+					  CORBA::InterfaceDef       *iface, 
+					  CORBA::ImplementationDef  *impl,
+					  const char                *repoid);
 
 // Write the contents of sv into res, using res->type
 bool              pmico_to_any           (CORBA::Any *res, SV *sv);
@@ -94,6 +102,24 @@ SV *              pmico_from_any         (CORBA::Any *any);
 
 // ==== From true.cc ====
 
+// Generic object restorer
+
+class PMicoRestorer : public CORBA::BOAObjectRestorer {
+    HV *restorers;
+    HV *binders;
+    
+public:
+    PMicoRestorer ();
+    ~PMicoRestorer ();
+
+    CORBA::Boolean restore (CORBA::Object_ptr);
+    CORBA::Boolean bind (const char *repoid,
+			 const SequenceTmpl<CORBA::OctetWrapper> &tag);
+    
+    void add_restorer (char *repoid, SV *callback);
+    void add_binder   (char *repoid, SV *callback);
+};
+
 // Class that handles method invocations for a object incarnated
 // in a Perl object.
 class PMicoTrueObject : public CORBA::DynamicImplementation {
@@ -102,6 +128,7 @@ public:
     virtual ~PMicoTrueObject ();
     virtual void invoke ( CORBA::ServerRequest_ptr _req,
 			  CORBA::Environment &_env );
+    virtual CORBA::Boolean _save_object ();
     void servant_destroyed ();	// Etherealize ?
 
 private:

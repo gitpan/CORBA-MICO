@@ -2,15 +2,19 @@ package CORBA::MICO;
 
 use strict;
 no strict qw(refs);
-require Carp;
 use vars qw($VERSION @ISA);
 
 require DynaLoader;
 require Error;
 
+require CORBA::MICO::Fixed;
+require CORBA::MICO::LongLong;
+require CORBA::MICO::ULongLong;
+require CORBA::MICO::LongDouble;
+
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.1';
+$VERSION = '0.2';
 
 bootstrap CORBA::MICO $VERSION;
 
@@ -25,7 +29,11 @@ sub import {
 	my @ids = @{$keys{ids}};
 	while (@ids) {
 	    my ($id, $idlfile) = splice(@ids,0,2);
-	    $orb->preload($id) || Carp::carp("Could not preload '$_'");
+
+	    if (!$orb->preload($id)) {
+		require Carp;
+		Carp::carp("Could not preload '$_'");
+	    } 
 	}
     }
 }
@@ -63,6 +71,13 @@ sub AUTOLOAD {
 	&{"$ {newclass}::$ {method}"}(@_);
     }
 }
+
+# Default - don't save object at all
+sub _save_object { 0; }
+
+package CORBA::MICO::GtkDispatcher;
+
+@CORBA::MICO::GtkDispatcher::ISA = qw(CORBA::Dispatcher);
 
 package CORBA::Exception;
 
@@ -179,7 +194,35 @@ Returns the value of the any.
 
 =over 4
 
-=item impl_is_ready ( [ IMPLEMENTATION_DEF ] )
+=item impl_is_ready ( IMPLEMENTATION_DEF )
+
+=item deactivate_impl ( IMPLEMENTATION_DEF )
+
+=item obj_is_ready ( OBJ, IMPLEMENTATION_DEF )
+
+=item deactivate_obj ( OBJ )
+
+=item dispose ( OBJ )
+
+=back
+
+=head1 Methods of CORBA::BOAObjectRestorer
+
+=over 4
+
+=item new
+
+=item add_binders ( [ REPOID => CALLBACK ] ... )
+
+=item add_restorers ( [ REPOID => CALLBACK ] ... )
+
+=back
+
+=head1 Methods of CORBA::MICO::GtkDispatcher
+
+=over 4
+
+=item new
 
 =back
 
@@ -187,16 +230,24 @@ Returns the value of the any.
 
 =over 4
 
+=item _boa
+
+=item _ident
+
 =item _get_interface
 
 =item _get_implementation
+
+=item _self
+
+=item _restore
+
+=item _repoid
 
 =item _set_repoid (  REPOID  )
 
 Specify the repository ID of the interface that this
 object implements.
-
-=item _repoid
 
 =back
 
@@ -204,7 +255,11 @@ object implements.
 
 =over 4
 
+=item bind ( REPOID, [ OBJECT_TAG [, ADDR ]] )
+
 =item BOA_init ( ID )
+
+=item dispatcher ( DISPATCHER )
 
 =item object_to_string ( OBJ )
 
@@ -212,7 +267,19 @@ object implements.
 
 =item string_to_object ( STRING )
 
+=item run 
+
+=item shutdown ( WAIT_FOR_COMPLETION )
+
+=item perform_work
+
+=item work_pending
+
 =item preload ( REPOID )
+
+Force the interface specified by REPOID to be loaded from the
+Interface Repository. Returns a true value if the operation
+succeeds.
 
 =back
 
@@ -234,17 +301,11 @@ the typecode constant.
 In the future, this scheme will probably be revised, or
 replaced.
 
-=item preload ( REPOID )
-
-Force the interface specified by REPOID to be loaded from the
-Interface Repository. Returns a true value if the operation
-succeeds.
-
 =back
 
 =head1 AUTHOR
 
-Owen Taylor <owt1@cornell.edu>
+Owen Taylor <otaylor@gtk.org>
 
 =head1 SEE ALSO
 

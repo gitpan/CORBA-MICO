@@ -50,6 +50,30 @@ C<boolean> map as expected for Perl. That is, a CORBA C<boolean>
 maps to "" if false and to 1 if true. A Perl scalar maps to
 CORBA::TRUE if it is true, and CORBA::FALSE otherwise.
 
+The remaining numeric types mapped to blessed objects.
+C<long long> maps to objects in the package C<CORBA::LongLong>,
+C<unsigned long long> maps to objects in the package C<CORBA::ULongLong>,
+C<long double> maps to objects in the package C<CORBA::LongDouble>.
+C<fixed> maps to objects in the package C<CORBA::Fixed>.
+
+All of these packages provide overloading for the basic numeric
+operations. For the C<CORBA::LongLong>, C<CORBA::ULongLong>, and
+C<CORBA::LongDouble>, the mapping is one-to-one.  
+
+For C<CORBA::Fixed>, each object has a scale which is propagated in
+arithmetic operations, but no fixed number of digits. Arithmetic
+operations other than division are done at infinite precision; the
+result of division is truncated at 31 digits. When the CORBA::Fixed
+object is provided as an argument to a CORBA call with the argument
+type specified C<fixed<d,s>>, the C<CORBA::Fixed> object will be
+rounded to scale C<s> and padded or truncated on the left to C<d>
+digits.
+
+Providing an value not in one of the above classes to a numeric
+operation expecting the corresponding type will give the same result
+as converting the value to a string by Perl's normal rules, then
+creating a value in the corresponding class from that string.
+
 =head1 Mapping for constructed types
 
 =over 4
@@ -85,6 +109,9 @@ Sequences of C<octet> and C<char> map to Perl strings. Other
 sequences map to array references.
 
 =item Arrays
+
+Arrays map to Perl array references. Multiple dimensional
+arrays map to nested Perl array references.
 
 =item Anys
 

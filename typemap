@@ -1,16 +1,34 @@
 TYPEMAP
-CORBA::Any	T_PTROBJ
-CORBA::ORB	T_PTROBJ
-CORBA::BOA	T_PTROBJ
-CORBA::Object	T_MICOOBJ
-CORBA::TypeCode	T_PTROBJ
+CORBA::Any	  T_PTROBJ
+CORBA::ORB	  T_PTROBJ
+CORBA::BOA	  T_PTROBJ
+CORBA::Object	  T_MICOOBJ
+CORBA::TypeCode	  T_PTROBJ
+CORBA::Dispatcher T_PTROBJ
+CORBA::MICO::GtkDispatcher T_PTROBJ
+CORBA::BOAObjectRestorer   T_PTROBJ
+CORBA::LongLong   T_LONGLONG
+CORBA::ULongLong   T_ULONGLONG
+CORBA::LongDouble T_LONGDOUBLE
 
 ######################################################################
 INPUT
 T_MICOOBJ
 	$var = pmico_sv_to_obj ($arg)
+T_LONGLONG
+        $var = SvLLV ($arg)
+T_ULONGLONG
+        $var = SvULLV ($arg)
+T_LONGDOUBLE
+        $var = SvLDV ($arg)
 
 ######################################################################
 OUTPUT
 T_MICOOBJ
 	$arg = pmico_find_or_create ($var);
+T_LONGLONG
+	$arg = ll_from_longlong ($var);
+T_ULONGLONG
+	$arg = ull_from_ulonglong ($var);
+T_LONGDOUBLE
+	$arg = ld_from_longdouble ($var);

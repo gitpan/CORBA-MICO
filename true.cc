@@ -8,6 +8,121 @@
 #define ERRSV GvSV(errgv)
 #endif
 
+PMicoRestorer::PMicoRestorer ()
+{
+    restorers = newHV();
+    binders = newHV();
+}
+
+PMicoRestorer::~PMicoRestorer ()
+{
+    hv_undef (restorers);
+    hv_undef (binders);
+}
+
+CORBA::Boolean
+PMicoRestorer::restore (CORBA::Object_ptr obj) 
+{
+    CORBA::Boolean result = FALSE;
+    SV **svp = hv_fetch (restorers, (char *)obj->_repoid(), strlen(obj->_repoid()), 0);
+
+    if (svp) {
+	dSP;
+	
+	SV *objsv = pmico_find_or_create (CORBA::Object::_duplicate(obj));
+
+	ENTER;
+	SAVETMPS;
+
+	PUSHMARK (sp);
+	XPUSHs (sv_2mortal (objsv));
+	PUTBACK;
+	
+	int count = perl_call_sv (*svp, G_SCALAR | G_EVAL);
+	SPAGAIN;
+	    
+	if (SvTRUE(ERRSV) || count != 1) {
+	    warn ("Error occured in bind callback: %s", 
+		  SvTRUE(ERRSV) ? SvPV(ERRSV,na) : 
+		                  "wrong number of items returned");
+	    while (count--)	/* empty stack */
+	      (void)POPs;
+	    PUTBACK;  
+    
+	} else {
+	    SV *tmp = POPs;	/* SvTRUE is a macro... */
+	    result = SvTRUE (tmp);
+	    PUTBACK;
+	}
+
+	FREETMPS;
+	LEAVE;
+    }
+    return result;
+}
+
+CORBA::Boolean
+PMicoRestorer::bind (const char *repoid,
+		     const SequenceTmpl<CORBA::OctetWrapper> &tag)
+{
+    CORBA::Boolean result = FALSE;
+    SV **svp = hv_fetch (binders, (char *)repoid, strlen(repoid), 0);
+
+    if (svp) {
+	dSP;
+	
+	SV *tagsv = newSV(tag.length()+1);
+	char *pv = SvPVX (tagsv);
+	
+	for (int i = 0 ; i < tag.length() ; i++) {
+	    pv[i] = tag[i];
+	}
+	pv[tag.length()] = '\0';
+
+	ENTER;
+	SAVETMPS;
+
+	PUSHMARK (sp);
+	XPUSHs (sv_2mortal (newSVpv ((char *)repoid, 0)));
+	XPUSHs (sv_2mortal (tagsv));
+	PUTBACK;
+	
+	int count = perl_call_sv (*svp, G_SCALAR | G_EVAL);
+	SPAGAIN;
+
+
+	if (SvTRUE(ERRSV) || count != 1) {
+	    warn ("Error occured in bind callback: %s", 
+		  SvTRUE(ERRSV) ? SvPV(ERRSV,na) : 
+		                  "wrong number of items returned");
+	    while (count--)	/* empty stack */
+	      (void)POPs;
+	    PUTBACK;  
+    
+	} else {
+	    result = SvTRUE (POPs);
+	    PUTBACK;
+	}
+
+	FREETMPS;
+	LEAVE;
+
+    }
+    return result;
+}
+
+void
+PMicoRestorer::add_restorer (char *repoid, SV *callback)
+{
+  hv_store (restorers, repoid, strlen(repoid), newSVsv (callback), 0);
+}
+
+void
+PMicoRestorer::add_binder (char *repoid, SV *callback)
+{
+  hv_store (binders, repoid, strlen(repoid), newSVsv (callback), 0);
+}
+
 PMicoTrueObject::PMicoTrueObject (SV *_perlobj, const char *repoid)
 {
     assert (SvROK(_perlobj));
@@ -29,6 +144,35 @@ void
 PMicoTrueObject::servant_destroyed ()
 {
     perlobj = NULL;
+}
+
+CORBA::Boolean
+PMicoTrueObject::_save_object ()
+{
+    CORBA::Boolean result = FALSE;
+
+    dSP;
+      
+    PUSHMARK (sp);
+    XPUSHs(sv_2mortal(newRV_inc(perlobj)));
+    PUTBACK;
+    
+    int count = perl_call_method ("_save_object", G_EVAL | G_SCALAR);
+    SPAGAIN;
+    
+    if (SvTRUE(ERRSV) || count != 1) {
+      warn ("Error occured while saving object: %s", 
+	    SvTRUE(ERRSV) ? SvPV(ERRSV,na) : 
+	    "wrong number of items returned");
+      while (count--)	/* empty stack */
+	(void)POPs;
+      
+      result = FALSE;
+    } else {
+      result = SvTRUE (POPs);
+    }
+    PUTBACK;  
+    return result;
 }
 
 CORBA::OperationDescription *
@@ -148,7 +292,7 @@ PMicoTrueObject::encode_exception ( const char *name, SV *perl_except )
 	PUTBACK;
 
 	warn("Error fetching exception repository ID");
-	goto error;
+	return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
     }
 
     char *repoid = POPp;
@@ -160,7 +304,7 @@ PMicoTrueObject::encode_exception ( const char *name, SV *perl_except )
 
 	if (!SvROK(perl_except) || (SvTYPE(SvRV(perl_except)) != SVt_PVHV)) {
 	    warn("panic: exception not a hash reference");
-	    goto error;
+	    return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
 	}
 
 	CORBA::CompletionStatus status;
@@ -205,14 +349,11 @@ PMicoTrueObject::encode_exception ( const char *name, SV *perl_except )
 			return new CORBA::UnknownUserException (any);
 		    else {
 			warn ("Error creating exception object for '%s'", repoid);
-			goto error;
+			return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
 		    }
 		}
 	    }
     }
-
- error:
-    return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
 }
 
 void    
@@ -265,7 +406,12 @@ PMicoTrueObject::invoke ( CORBA::ServerRequest_ptr _req,
 	CORBA::Flags dir = args->item(i)->flags();
 	
 	if ((dir == CORBA::ARG_IN) || (dir == CORBA::ARG_INOUT)) {
+	    /* We need the PUTBACK/SPAGAIN here, since the call to
+	     * pmico_from_any might want the stack
+	     */
+	    PUTBACK;
 	    SV *arg = pmico_from_any (args->item(i)->value());
+	    SPAGAIN;
 	    if (!arg) {
 		_req->exception (CORBA::SystemException::_create_sysex("IDL:omg.org/CORBA/BAD_PARAM:1.0", 
 								       0, CORBA::COMPLETED_NO));
