@@ -1,7 +1,7 @@
-CORBA::MICO-0.6.0
+CORBA::MICO-0.6.1
 =================
 
-Perl Interface to MICO (Mico Is COrba) version 0.6.0
+Perl Interface to MICO (Mico Is COrba) version 0.6.1
 
 
 Status
@@ -40,17 +40,10 @@ for figuring out MICO/internals.pod.
 Installation
 ============
 
-To compile and run this package, you'll need to have MICO v2.2.7
+To compile and run this package, you'll need to have MICO v2.3.5
 or better installed. Information about MICO is availaible from:
 
    http://diamant-atm.vsb.cs.uni-frankfurt.de/~mico/
-
-IMPORTANT NOTE:
-
- mico-2.2.7 has a bug in the handling of extraction
- from Anys. To get CORBA::MICO to work with mico-2.2.7 you
- must apply the patch mico-2.2.7-checker.patch
- included in this distribution.
 
 You'll also need Graham Barr's Error module - available
 from CPAN in the directory:
@@ -58,9 +51,7 @@ from CPAN in the directory:
    http://www.perl.com/CPAN/authors/id/GBARR/
 
 And a reasonable recent version of Perl. (This has been
-tested with perl5.004_04, and perl5.005_03. 
-perl5.005_02 had a problem where uncaught exceptions
-didn't get properly stringified.)
+tested with perl5.6.0, and perl5.005_03)
 
 For the demo programs you'll may want the Data::Dumper
 module from CPAN:
@@ -100,7 +91,7 @@ And then run the client program:
 You should see output that looks something like:
 
 ----------
-Using /usr/home/owen/tmp/CORBA-MICO-0.4.8/blib
+Using /usr/home/owen/tmp/CORBA-MICO-0.6.1/blib
 Balance is +500.00
 Favorite color is taupe
 Lottery numbers are 21 63 83 96
@@ -193,6 +184,12 @@ and restarting the servers (ird and micod) as this script does.
 But doing so when testing things out makes it a lot easier
 to make sure that the current test isn't being affected by
 previous test failures.
+
+
+=================
+
+URLs   : http://corba-mico.sourceforge.net
+Authors: Owen Taylor (original author) and Nikolai Logvinov (current maintainer)Contact: Nikolai Logvinov <logvinon@users.sourceforge.net>
 
 =================
 

@@ -314,7 +314,13 @@ string_to_object (self, str)
     CORBA::ORB self;
     char *     str;
     CODE:
-    RETVAL = self->string_to_object (str);
+    try {
+        RETVAL = self->string_to_object (str);
+    } catch (CORBA::SystemException &ex) {
+	pmico_throw (pmico_system_except (ex->_repoid (),
+					  ex->minor (),
+					  ex->completed ()));
+    }
     OUTPUT:
     RETVAL
 

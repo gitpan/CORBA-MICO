@@ -41,10 +41,10 @@ store_interface_description (CORBA::InterfaceDef *iface)
 	delete (PMicoIfaceInfo *)SvIV(*result);
     }
 
-    if (iface) {
+    {
 	CORBA::String_var pkg = iface->absolute_name();
 	const char *pkgname;
-	if (!strncmp(pkg, "::", 2))
+	if (!strncmp(pkg, "::", 2))	//FIXME:: always starts from '::' ?
 	    pkgname = pkg + 2;
 	else
 	    pkgname = pkg;
@@ -58,8 +58,6 @@ store_interface_description (CORBA::InterfaceDef *iface)
 	sv_setpv (pkg_sv, repoid);
 	return info;
     }
-    else
-	hv_delete (hv, (char *)repoid, len, G_DISCARD);
     
     return NULL;
 }
@@ -285,6 +283,9 @@ static void
 define_method (const char *pkg, const char *prefix, const char *name, I32 index)
 {
     string fullname = string (pkg) + prefix + name;
+    if( get_cv( (char *)fullname.c_str(), 0 ) ) {
+      return;
+    }
 
     CV *method_cv = newXS ((char *)fullname.c_str(), 
 			   _pmico_callStub, __FILE__);
@@ -321,7 +322,6 @@ pmico_init_interface (CORBA::InterfaceDef *iface, const char *id)
 	id = desc->id;
 
     // Set up the interface's operations and attributes
-
     for ( unsigned int i = 0 ; i < desc->operations.length() ; i++) {
         CORBA::OperationDescription *opr = &desc->operations[i];
 	define_method (info->pkg.c_str(), "::", opr->name, OPERATION_BASE + i);
@@ -419,6 +419,11 @@ pmico_load_contained (CORBA::Contained *_contained, CORBA::ORB_ptr _orb,
 	retval = pmico_init_interface (iface, _id);
     else
 	retval =  NULL;
+
+    // If the container is an exception, define it
+    CORBA::ExceptionDef_var excp = CORBA::ExceptionDef::_narrow (contained);
+    if( excp )
+	define_exception( excp->id() );
 
     // Initialize all constants in the container, and all
     // enclosed interfaces.

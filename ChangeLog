@@ -1,3 +1,29 @@
+2001-03-07 12:25  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, README: Up version to 0.6.1
+
+2001-03-07 11:19  Nikolai Logvinov <logvinon@mail.ru>
+
+	* README: actualize
+
+2001-03-05 17:42  Nikolai Logvinov <logvinon@mail.ru>
+
+	* interfaces.cc: Check for already defined methods. When base
+	interfaces are based on the same interface then it's methods are
+	duplicated.
+
+2001-03-01 15:33  Nikolai Logvinov <logvinon@mail.ru>
+
+	* interfaces.cc: UserExceptions can be preloaded
+
+2001-03-01 15:31  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: surround call with a trap for CORBA::Exception
+
+2001-02-26 16:16  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, README: Up version to 0.6.0
+
 2001-02-26 15:47  Nikolai Logvinov <logvinon@mail.ru>
 
 	* Makefile.PL: clean account.ref
