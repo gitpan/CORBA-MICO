@@ -1,118 +1,169 @@
-2001-04-12 11:46  Nikolai Logvinov <logvinon@mail.ru>
+2001-09-07 16:57  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, README: Up version to 0.6.3
+
+2001-09-07 16:51  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.PL: add option for Solaris to put path to MICO libraries
+	into binary
+
+2001-09-07 16:40  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MANIFEST, MANIFEST.SKIP: remove ir-browser obsoleted by CCC
+
+2001-09-04 11:31  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/Makefile.PL: 'PREREQ_PM' - required modules/versions added
+
+2001-09-03 13:06  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: Hypertext.pm, IR2Dia.pm, IREntry.pm, IRRoot.pm,
+	Makefile.PL, Misc.pm, Pixtree.pm, README, ccc: CORBA Control Center
+	project started
+
+2001-09-03 11:55  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: catch CORBA::Exception during
+	resolve_initial_references()
+
+2001-08-17 12:48  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.PL: Take into account that MICO may be installed into
+	unusual place, thanks to John Stoffel <stoffel@casc.com>
+
+2001-06-26 15:31  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, client: add list_initial_services()
+
+2001-06-25 18:50  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Account.idl, client, interfaces.cc, server: fixed bug with inout
+	args, reported by Arun Kumar U <bksys@vsnl.com>
+
+2001-05-04 12:26  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: add INT2PTR macros for perl5.005_03 compatibility
+
+2001-04-20 12:39  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: fixed strange mistake with Exception indirection,
+	submitted by Alexei Liagouzine <a.liagouzine@telesens.de>
+
+2001-04-12 11:46  Nikolay Logvinov <logvinon@mail.ru>
 
 	* interfaces.cc: change get_cv() to perl_get_cv() for perl5.005
 	compatibility
 
-2001-04-12 11:37  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-12 11:37  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, README: Up version to 0.6.2
 
-2001-04-11 13:22  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 13:22  Nikolay Logvinov <logvinon@mail.ru>
 
 	* README, developers: new developer - Pavel Rousnak
 
-2001-04-11 13:09  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 13:09  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamicAny::DynValue
 
-2001-04-11 13:01  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 13:01  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamicAny::DynArray
 
-2001-04-11 12:58  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 12:58  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamicAny::DynSequence
 
-2001-04-11 12:37  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 12:37  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamicAny::DynUnion
 
-2001-04-11 12:06  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-11 12:06  Nikolay Logvinov <logvinon@mail.ru>
 
 	* Account.idl, MICO.xs, client, pmico.h, types.cc: finish
 	DynamicAny::DynStruct
 
-2001-04-04 12:56  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-04 12:56  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, client: Fixed DynamicAny::DynFixed::DESTROY,
 	DynamicAny::DynEnum::DESTROY. Add tests for DynamicAny::.
 
-2001-04-04 12:30  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-04 12:30  Nikolay Logvinov <logvinon@mail.ru>
 
 	* Account.idl, MICO.xs, client, pmico.h, server, typemap, types.cc:
 	Start DynamicAny::DynStruct. Change DESTROY policy for DynamicAny. 
 	Fixed a bug concerned converting CORBA::Any to SV.
 
-2001-04-03 15:28  Nikolai Logvinov <logvinon@mail.ru>
+2001-04-03 15:28  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm: fixed @packet::ISA
 
-2001-03-26 14:48  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-26 14:48  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamicAny::DynEnum
 
-2001-03-26 13:29  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-26 13:29  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, typemap: introduce DynamiAny::DynFixed
 
-2001-03-23 13:13  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-23 13:13  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, MICO.xs, errors.cc: Introduce DynamicAny::DynAny
 
-2001-03-22 11:52  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-22 11:52  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, client, errors.cc, typemap: Introduce
 	DynamicAny::DynAnyFactory
 
-2001-03-14 11:54  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-14 11:54  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs: added CORBA::is_nil()
 
-2001-03-13 12:49  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-13 12:49  Nikolay Logvinov <logvinon@mail.ru>
 
 	* interfaces.cc: catch CORBA::Exception during req->invoke()
 
-2001-03-07 12:25  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-07 12:25  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, README: Up version to 0.6.1
 
-2001-03-07 11:19  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-07 11:19  Nikolay Logvinov <logvinon@mail.ru>
 
 	* README: actualize
 
-2001-03-05 17:42  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-05 17:42  Nikolay Logvinov <logvinon@mail.ru>
 
 	* interfaces.cc: Check for already defined methods. When base
 	interfaces are based on the same interface then it's methods are
 	duplicated.
 
-2001-03-01 15:33  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-01 15:33  Nikolay Logvinov <logvinon@mail.ru>
 
 	* interfaces.cc: UserExceptions can be preloaded
 
-2001-03-01 15:31  Nikolai Logvinov <logvinon@mail.ru>
+2001-03-01 15:31  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs: surround call with a trap for CORBA::Exception
 
-2001-02-26 16:16  Nikolai Logvinov <logvinon@mail.ru>
+2001-02-26 16:16  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, README: Up version to 0.6.0
 
-2001-02-26 15:47  Nikolai Logvinov <logvinon@mail.ru>
+2001-02-26 15:47  Nikolay Logvinov <logvinon@mail.ru>
 
 	* Makefile.PL: clean account.ref
 
-2001-02-26 15:37  Nikolai Logvinov <logvinon@mail.ru>
+2001-02-26 15:37  Nikolay Logvinov <logvinon@mail.ru>
 
 	* tictactoe: rand() returns fractional number, truncate it
 
-2001-02-26 15:34  Nikolai Logvinov <logvinon@mail.ru>
+2001-02-26 15:34  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, server.cc: duplicate reference to PortableServer::POA
 	adapter before convert it to SV due to PortableServer::POA::DESTROY
 	()
 
-2001-02-26 15:23  Nikolai Logvinov <logvinon@mail.ru>
+2001-02-26 15:23  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.xs, errors.cc, exttypes.h, interfaces.cc, server.cc,
 	types.cc: Due to perl5005delta:"All Perl global variables that are
@@ -130,10 +181,9 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
-	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
-	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
-	mico/ir_base.idl: Initial revision
+	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
+	shlib/perl-client, shlib/server.cc, mico/ir.idl, mico/ir_base.idl:
+	Initial revision
 
 1999-06-13 18:35  Owen Taylor  <otaylor@redhat.com>
 
@@ -146,8 +196,7 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
-	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
-	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
-	mico/ir_base.idl: Initial import of Perl bindings for MICO
+	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
+	shlib/perl-client, shlib/server.cc, mico/ir.idl, mico/ir_base.idl:
+	Initial import of Perl bindings for MICO
 

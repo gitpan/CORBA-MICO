@@ -164,7 +164,7 @@ XS(_pmico_callStub)
 		  if (!pmico_to_any ( argany , SvRV(arg) ))
 		      croak ("Error marshalling parameter '%s'",
 			     (char *)opr->parameters[i].name);
-		  req->add_in_arg ( opr->parameters[i].name ) = *argany;
+		  req->add_inout_arg ( opr->parameters[i].name ) = *argany;
 		}
 		j++;
 		break;

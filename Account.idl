@@ -50,6 +50,8 @@ module Account {
     AcctCounter counter();
     void server_exit ();
 
+    void set_new_get_old( inout string smth );
+
     // DynamicAny test
     enum da_enum {
       da_enum_1, da_enum_2, da_enum_3

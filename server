@@ -74,6 +74,7 @@ sub new {
 		      nickname => 'Sneezy'
 		     };
     $self->{appearance} = [ map { [ (0..9) ] } 0..5 ];
+    $self->{something} = "";
 
     $self;
 }
@@ -186,6 +187,14 @@ sub _get_prefs {
 sub _set_prefs {
     my ($self,$p) = @_;
     $self->{prefs} = $p;
+}
+
+###
+sub set_new_get_old {
+    my ($self,$smth) = @_;
+    my $old = $self->{something};
+    $self->{something} = $$smth;
+    $$smth = $old;
 }
 
 package main;

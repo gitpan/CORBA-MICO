@@ -10,6 +10,11 @@
 #undef XS_VERSION_BOOTCHECK
 #define XS_VERSION_BOOTCHECK
 
+/* perl5.005_03 lacks INT2PTR macros */
+#ifndef INT2PTR
+#  define INT2PTR(any,d)        (any)(d)
+#endif
+
 typedef CORBA::Any *        CORBA__Any;
 typedef CORBA::Object_ptr   CORBA__Object;
 typedef CORBA::ORB_ptr      CORBA__ORB;
@@ -217,9 +222,9 @@ ORB_init (id)
 	    } catch (CORBA::SystemException &ex) {
 	      if (argv)
 	          free (argv);
-	      pmico_throw (pmico_system_except (ex->_repoid (),
-	      					ex->minor (),
-						ex->completed ()));
+	      pmico_throw (pmico_system_except (ex._repoid (),
+	      					ex.minor (),
+						ex.completed ()));
 	    }
 	    
 	    av_clear (ARGV);
@@ -308,13 +313,33 @@ object_to_string (self, obj)
     OUTPUT:
     RETVAL
 
+AV *
+list_initial_services( self )
+    CORBA::ORB self;
+    CODE:
+    CORBA::ORB::ObjectIdList_var ids = self->list_initial_services();
+    RETVAL = newAV();
+    av_extend(RETVAL, ids->length());
+    for( CORBA::ULong i = 0; i < ids->length(); i++ ) {
+      av_push( RETVAL, newSVpv(ids[i], 0) );
+    }
+    OUTPUT:
+      RETVAL
+
 SV *
 resolve_initial_references (self, id)
     CORBA::ORB self;
     char *     id
     CODE:
     {
-	CORBA::Object *obj = self->resolve_initial_references (id);
+	CORBA::Object *obj = CORBA::OBJECT_NIL;
+	try {
+	  obj = self->resolve_initial_references (id);
+	} catch (CORBA::SystemException &ex) {
+	    pmico_throw (pmico_system_except (ex._repoid (),
+					      ex.minor (),
+					      ex.completed ()));
+	}
 	if( strcmp( id, "DynAnyFactory" ) == 0 ) {
 	  DynamicAny::DynAnyFactory_ptr dafact = DynamicAny::DynAnyFactory::_narrow(obj);
 	  RETVAL = newSV(0);
@@ -347,9 +372,9 @@ string_to_object (self, str)
     try {
         RETVAL = self->string_to_object (str);
     } catch (CORBA::SystemException &ex) {
-	pmico_throw (pmico_system_except (ex->_repoid (),
-					  ex->minor (),
-					  ex->completed ()));
+	pmico_throw (pmico_system_except (ex._repoid (),
+					  ex.minor (),
+					  ex.completed ()));
     }
     OUTPUT:
     RETVAL
@@ -496,7 +521,7 @@ id (self)
     try {
 	RETVAL = (char *)self->id ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -508,7 +533,7 @@ name (self)
     try {
 	RETVAL = (char *)self->name ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -520,7 +545,7 @@ member_count (self)
     try {
 	RETVAL = self->member_count ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -533,9 +558,9 @@ member_name (self, index)
     try {
 	RETVAL = (char *)self->member_name (index);
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (CORBA::TypeCode::Bounds &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -548,9 +573,9 @@ member_type (self, index)
     try {
 	RETVAL = self->member_type (index);
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (CORBA::TypeCode::Bounds &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -563,9 +588,9 @@ member_label (self, index)
     try {
 	RETVAL = self->member_label (index);
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (CORBA::TypeCode::Bounds &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -577,7 +602,7 @@ discriminator_type (self)
     try {
 	RETVAL = self->discriminator_type ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -589,7 +614,7 @@ default_index (self)
     try {
 	RETVAL = self->default_index ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -601,7 +626,7 @@ length (self)
     try {
 	RETVAL = self->length ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -613,7 +638,7 @@ content_type (self)
     try {
 	RETVAL = self->content_type ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -625,7 +650,7 @@ fixed_digits (self)
     try {
 	RETVAL = self->fixed_digits ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -637,7 +662,7 @@ fixed_scale (self)
     try {
 	RETVAL = self->fixed_scale ();
     } catch (CORBA::TypeCode::BadKind &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1015,9 +1040,9 @@ PortableServer::POA::create_POA (adapter_name, mngr_sv, ...)
     try {
 	RETVAL = THIS->create_POA (adapter_name, mngr, policies);
     } catch (PortableServer::POA::AdapterAlreadyExists &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::InvalidPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
     OUTPUT:
@@ -1037,7 +1062,7 @@ PortableServer::POA::get_servant_manager ()
     try {
         RETVAL = THIS->get_servant_manager ();
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1052,7 +1077,7 @@ PortableServer::POA::set_servant_manager (obj)
     try {
 	THIS->set_servant_manager (manager);
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 PortableServer::ServantBase
@@ -1061,9 +1086,9 @@ PortableServer::POA::get_servant ()
     try {
         RETVAL = THIS->get_servant ();
     } catch (PortableServer::POA::NoServant &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1075,7 +1100,7 @@ PortableServer::POA::set_servant (servant)
     try {
         THIS->set_servant (servant);
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 PortableServer::ObjectId
@@ -1085,9 +1110,9 @@ PortableServer::POA::activate_object (servant)
     try {
         RETVAL = THIS->activate_object (servant);
     } catch (PortableServer::POA::ServantAlreadyActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1100,11 +1125,11 @@ PortableServer::POA::activate_object_with_id (id, servant)
     try {
         THIS->activate_object_with_id (id, servant);
     } catch (PortableServer::POA::ServantAlreadyActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::ObjectAlreadyActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1114,9 +1139,9 @@ PortableServer::POA::deactivate_object (id)
     try {
         THIS->deactivate_object (id);
     } catch (PortableServer::POA::ObjectNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 CORBA::Object
@@ -1126,7 +1151,7 @@ PortableServer::POA::create_reference (intf)
     try {
         RETVAL = THIS->create_reference (intf);
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1139,7 +1164,7 @@ PortableServer::POA::create_reference_with_id (oid, intf)
     try {
         RETVAL = THIS->create_reference_with_id (oid, intf);
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1151,9 +1176,9 @@ PortableServer::POA::servant_to_id (servant)
     try {
         RETVAL = THIS->servant_to_id (servant);
     } catch (PortableServer::POA::ServantNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1165,9 +1190,9 @@ PortableServer::POA::servant_to_reference (servant)
     try {
         RETVAL = THIS->servant_to_reference (servant);
     } catch (PortableServer::POA::ServantNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1179,11 +1204,11 @@ PortableServer::POA::reference_to_servant (reference)
     try {
         RETVAL = THIS->reference_to_servant (reference);
     } catch (PortableServer::POA::ObjectNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongAdapter &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1195,9 +1220,9 @@ PortableServer::POA::reference_to_id (reference)
     try {
         RETVAL = THIS->reference_to_id (reference);
     } catch (PortableServer::POA::WrongAdapter &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1209,9 +1234,9 @@ PortableServer::POA::id_to_servant (id)
     try {
         RETVAL = THIS->id_to_servant (id);
     } catch (PortableServer::POA::ObjectNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1223,9 +1248,9 @@ PortableServer::POA::id_to_reference (id)
     try {
         RETVAL = THIS->id_to_reference (id);
     } catch (PortableServer::POA::ObjectNotActive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (PortableServer::POA::WrongPolicy &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1243,7 +1268,7 @@ PortableServer::POAManager::activate ()
     try {
         THIS->activate ();
     } catch (PortableServer::POAManager::AdapterInactive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1253,7 +1278,7 @@ PortableServer::POAManager::hold_requests (wait_for_completion)
     try {
 	THIS->hold_requests (SvTRUE (wait_for_completion));
     } catch (PortableServer::POAManager::AdapterInactive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1263,7 +1288,7 @@ PortableServer::POAManager::discard_requests (wait_for_completion)
     try {
 	THIS->discard_requests (SvTRUE (wait_for_completion));
     } catch (PortableServer::POAManager::AdapterInactive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1275,7 +1300,7 @@ PortableServer::POAManager::deactivate (etherealize_objects, wait_for_completion
 	THIS->deactivate (SvTRUE (etherealize_objects),
 			  SvTRUE (wait_for_completion));
     } catch (PortableServer::POAManager::AdapterInactive &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1291,7 +1316,7 @@ PortableServer::Current::get_POA ()
     try {
 	RETVAL = THIS->get_POA ();
     } catch (PortableServer::Current::NoContext &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1303,7 +1328,7 @@ PortableServer::Current::get_object_id ()
     try {
 	RETVAL = THIS->get_object_id ();
     } catch (PortableServer::Current::NoContext &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1500,7 +1525,7 @@ assign (self, dyn_any)
     try {
          self->assign( dyn_any );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1511,9 +1536,9 @@ from_any (self, any)
     try {
          self->from_any( *any );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 CORBA::Any
@@ -1555,9 +1580,9 @@ insert_boolean (self,value)
     try {
       self->insert_boolean((CORBA::Boolean)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1568,9 +1593,9 @@ insert_octet (self,value)
     try {
       self->insert_octet((CORBA::Octet)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1581,9 +1606,9 @@ insert_char (self,value)
     try {
       self->insert_char((CORBA::Char)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1594,9 +1619,9 @@ insert_short (self,value)
     try {
       self->insert_short((CORBA::Short)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1607,9 +1632,9 @@ insert_ushort (self,value)
     try {
       self->insert_ushort((CORBA::UShort)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1620,9 +1645,9 @@ insert_long (self,value)
     try {
       self->insert_long((CORBA::Long)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1633,9 +1658,9 @@ insert_ulong (self,value)
     try {
       self->insert_ulong((CORBA::ULong)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1646,9 +1671,9 @@ insert_float (self,value)
     try {
       self->insert_float((CORBA::Float)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1659,9 +1684,9 @@ insert_double (self,value)
     try {
       self->insert_double((CORBA::Double)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1672,9 +1697,9 @@ insert_string (self,value)
     try {
       self->insert_string((const char*)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1685,9 +1710,9 @@ insert_reference (self,value)
     try {
       self->insert_reference((CORBA::Object_ptr)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1698,9 +1723,9 @@ insert_typecode (self,value)
     try {
       self->insert_typecode((CORBA::TypeCode_ptr)value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1711,9 +1736,9 @@ insert_longlong (self,value)
     try {
       self->insert_longlong(value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1724,9 +1749,9 @@ insert_ulonglong (self,value)
     try {
       self->insert_ulonglong(value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1737,9 +1762,9 @@ insert_longdouble (self,value)
     try {
       self->insert_longdouble(value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 # void insert_wchar(in wchar value)
@@ -1753,9 +1778,9 @@ insert_any (self,value)
     try {
       self->insert_any(*value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -1766,9 +1791,9 @@ insert_dyn_any (self,value)
     try {
       self->insert_dyn_any(value);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 # void insert_val(in ValueBase value)
@@ -1780,9 +1805,9 @@ get_boolean (self)
     try {
       RETVAL = self->get_boolean();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1794,9 +1819,9 @@ get_octet (self)
     try {
       RETVAL = self->get_octet();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1808,9 +1833,9 @@ get_char (self)
     try {
       RETVAL = self->get_char();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1822,9 +1847,9 @@ get_short (self)
     try {
       RETVAL = self->get_short();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1836,9 +1861,9 @@ get_ushort (self)
     try {
       RETVAL = self->get_ushort();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1850,9 +1875,9 @@ get_long (self)
     try {
       RETVAL = self->get_long();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1864,9 +1889,9 @@ get_ulong (self)
     try {
       RETVAL = self->get_ulong();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1878,9 +1903,9 @@ get_float (self)
     try {
       RETVAL = self->get_float();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1892,9 +1917,9 @@ get_double (self)
     try {
       RETVAL = self->get_double();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1906,9 +1931,9 @@ get_string (self)
     try {
       RETVAL = self->get_string();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1920,9 +1945,9 @@ get_reference (self)
     try {
       RETVAL = self->get_reference();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1934,9 +1959,9 @@ get_typecode (self)
     try {
       RETVAL = self->get_typecode();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1948,9 +1973,9 @@ get_longlong (self)
     try {
       RETVAL = self->get_longlong();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1962,9 +1987,9 @@ get_ulonglong (self)
     try {
       RETVAL = self->get_ulonglong();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1976,9 +2001,9 @@ get_longdouble (self)
     try {
       RETVAL = self->get_longdouble();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -1993,9 +2018,9 @@ get_any (self)
     try {
       RETVAL = self->get_any();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2007,9 +2032,9 @@ get_dyn_any (self)
     try {
       RETVAL = self->get_dyn_any();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2080,9 +2105,9 @@ set_value (self,val)
     try {
       self->set_value(val);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     
 # narrow helper
@@ -2118,7 +2143,7 @@ set_as_string(self,value)
     try {
       self->set_as_string(value);
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 unsigned long
@@ -2137,7 +2162,7 @@ set_as_ulong(self,value)
     try {
       self->set_as_ulong(value);
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
 
 
@@ -2166,9 +2191,9 @@ current_member_name(self)
     try {
       RETVAL = self->current_member_name();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2180,9 +2205,9 @@ current_member_kind(self)
     try {
       RETVAL = (char*) TCKind_to_str( self->current_member_kind() );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2239,9 +2264,9 @@ set_members(self,members)
     try {
       self->set_members( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 AV*
@@ -2296,9 +2321,9 @@ set_members_as_dyn_any(self,members)
     try {
       self->set_members_as_dyn_any( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 # narrow helper
@@ -2334,7 +2359,7 @@ set_discriminator (self,d)
     try {
       self->set_discriminator(d);
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -2344,7 +2369,7 @@ set_to_default_member (self)
     try {
       self->set_to_default_member();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
 
 void
@@ -2354,7 +2379,7 @@ set_to_no_active_member (self)
     try {
       self->set_to_no_active_member();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
 
 bool
@@ -2380,7 +2405,7 @@ member (self)
     try {
       RETVAL = self->member();
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2392,7 +2417,7 @@ member_name (self)
     try {
       RETVAL = self->member_name();
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2404,7 +2429,7 @@ member_kind (self)
     try {
       RETVAL = (char*)TCKind_to_str( self->member_kind() );
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2442,7 +2467,7 @@ set_length (self,len)
     try {
       self->set_length(len);
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-      pmico_throw (pmico_builtin_except (ex));
+      pmico_throw (pmico_builtin_except (&ex));
     }
 
 AV*
@@ -2481,9 +2506,9 @@ set_elements(self,elements)
     try {
       self->set_elements( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 AV*
@@ -2522,9 +2547,9 @@ set_elements_as_dyn_any(self,elements)
     try {
       self->set_elements_as_dyn_any( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 # narrow helper
@@ -2580,9 +2605,9 @@ set_elements(self,elements)
     try {
       self->set_elements( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 AV*
@@ -2621,9 +2646,9 @@ set_elements_as_dyn_any(self,elements)
     try {
       self->set_elements_as_dyn_any( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 # narrow helper
@@ -2650,9 +2675,9 @@ current_member_name (self)
     try {
       RETVAL = self->current_member_name();
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2664,9 +2689,9 @@ current_member_kind(self)
     try {
       RETVAL = (char*) TCKind_to_str( self->current_member_kind() );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2723,9 +2748,9 @@ set_members(self,members)
     try {
       self->set_members( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 AV*
@@ -2780,9 +2805,9 @@ set_members_as_dyn_any(self,members)
     try {
       self->set_members_as_dyn_any( mbrs );
     } catch (DynamicAny::DynAny::TypeMismatch &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     } catch (DynamicAny::DynAny::InvalidValue &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
       
 # narrow helper
@@ -2809,7 +2834,7 @@ DynamicAny::DynAnyFactory::create_dyn_any(value)
     try {
 	RETVAL = THIS->create_dyn_any(*value);
     } catch (DynamicAny::DynAnyFactory::InconsistentTypeCode &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL
@@ -2821,7 +2846,7 @@ DynamicAny::DynAnyFactory::create_dyn_any_from_type_code(type)
     try {
 	RETVAL = THIS->create_dyn_any_from_type_code(type);
     } catch (DynamicAny::DynAnyFactory::InconsistentTypeCode &ex) {
-	pmico_throw (pmico_builtin_except (ex));
+	pmico_throw (pmico_builtin_except (&ex));
     }
     OUTPUT:
     RETVAL

@@ -49,7 +49,13 @@ typemap
 types.cc
 mico/ir_base.idl
 mico/ir.idl
-ir-browser/README
-ir-browser/TCUtils.pm
-ir-browser/browser
+ccc/Hypertext.pm
+ccc/IR2Dia.pm
+ccc/IREntry.pm
+ccc/IRRoot.pm
+ccc/Makefile.PL
+ccc/Misc.pm
+ccc/Pixtree.pm
+ccc/README
+ccc/ccc
 mico-2.2.7-checker.patch

@@ -1,7 +1,7 @@
-CORBA::MICO-0.6.2
+CORBA::MICO-0.6.3
 =================
 
-Perl Interface to MICO (Mico Is COrba) version 0.6.2
+Perl Interface to MICO (Mico Is COrba) version 0.6.3
 
 
 Status
@@ -91,7 +91,7 @@ And then run the client program:
 You should see output that looks something like:
 
 ----------
-Using /usr/home/owen/tmp/CORBA-MICO-0.6.2/blib
+Using /usr/home/owen/tmp/CORBA-MICO-0.6.3/blib
 Balance is +500.00
 Favorite color is taupe
 Lottery numbers are 21 63 83 96

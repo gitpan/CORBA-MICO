@@ -6,6 +6,11 @@ use Error qw(:try);
 use strict;
 
 my $orb = CORBA::ORB_init("mico-local-orb");
+my ($ids,$id);
+$ids = $orb->list_initial_services();
+foreach $id (@{$ids}) {
+  print "$id\n";
+}
 
 open IOR, "account.ref";
 my $ior = <IOR>;
@@ -155,5 +160,15 @@ try {
     print "}\n";
   }
 }
+
+# inout
+my $smth = "asd";
+print "inout: want '$smth'\n";
+$account->set_new_get_old( \$smth );
+print "inout: was '$smth' - MUST BE EMPTY\n";
+$smth = "qwe";
+$account->set_new_get_old( \$smth );
+print "inout: was '$smth' - MUST BE 'asd'\n";
+
 
 print "Successful completion\n"

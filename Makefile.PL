@@ -1,4 +1,5 @@
 use ExtUtils::MakeMaker;
+use Config;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
@@ -6,9 +7,10 @@ use ExtUtils::MakeMaker;
 
 for (split ':', $ENV{PATH}) {
     if (m!/bin$! && -f "$_/mico-c++") {
-	s/bin$/lib/;
-	if (-f "$_/mico-setup.sh") {
-	    $mico_setup = "$_/mico-setup.sh";
+	s#/bin$##;
+	$MICOPREFIX = $_;
+	if (-f "$MICOPREFIX/lib/mico-setup.sh") {
+	    $mico_setup = "$MICOPREFIX/lib/mico-setup.sh";
 	    last;
 	}
     }
@@ -26,9 +28,15 @@ if (defined $mico_setup) {
 $gtk_cflags = `gtk-config --cflags`;
 undef $gtk_cflags if $?;
 
+$MICOINC  = "-I$MICOPREFIX/include";
+$MICOLIBS = "-L$MICOPREFIX/lib -lmico$MICOVERSION";
 if (defined $gtk_cflags) {
     print STDERR "Including GTK support\n";
     push @OBJECTS,'gtkmico.o';
+    $MICOINC  .= " $gtk_cflags";
+}
+if( $Config{'osname'} eq "solaris" ) {
+   $MICOLIBS .= " -R$MICOPREFIX/lib";
 }
 
 if ($] < 5.0045) {
@@ -37,14 +45,14 @@ if ($] < 5.0045) {
 }
 
 WriteMakefile(
-    'CC'        => 'mico-c++',
+    'CC'        => "$MICOPREFIX/bin/mico-c++",
     'NAME'	=> 'CORBA::MICO',
     'VERSION_FROM' => 'MICO.pm',
-    'LIBS'	=> ["-lmico$MICOVERSION -lstdc++"],   
+    'LIBS'	=> ["$MICOLIBS -lstdc++"],   
     'DEFINE'	=> 
         (defined $gtk_cflags ? '-DHAVE_GTK '        : '') .
         ($] < 5.0045         ? '-DPERL5004_COMPAT ' : ''),
-    'INC'	=> defined $gtk_cflags ? $gtk_cflags : '',
+    'INC'	=> $MICOINC,
     'OBJECT'    => join(" ",@OBJECTS),
 #    'XSOPT'     => '-C++ -nolinenumbers',
     'OPTIMIZE'  => '-g -Wall',      
