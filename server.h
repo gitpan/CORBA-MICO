@@ -38,6 +38,7 @@ private:
 						 CORBA::TypeCode *&return_type,
 						 int         &inout_items,
 						 CORBA::ExcDescriptionSeq  *&exceptions);
+    PerlInterpreter* thx;	//! Perl context
     SV *perlobj;
     CORBA::InterfaceDef::FullInterfaceDescription *desc;
 };
@@ -57,11 +58,9 @@ private:
     SV *perlobj;
 };
 
-class PMicoServantActivator : public POA_PortableServer::ServantActivator {
+class PMicoServantActivator : public virtual POA_PortableServer::ServantActivator {
 public:
-    PMicoServantActivator               (SV *_perlobj) {
-	perlobj = SvRV(_perlobj);
-    }
+    PMicoServantActivator(SV *_perlobj);
 
     PortableServer::Servant incarnate   (const PortableServer::ObjectId& oid,
 				         PortableServer::POA_ptr         adapter);
@@ -71,6 +70,7 @@ public:
 					 CORBA::Boolean                  cleanup_in_progress,
 					 CORBA::Boolean                  remaining_activations);
 private:
+    PerlInterpreter* thx;	//! Perl context
     SV *perlobj;
 };
 

@@ -80,8 +80,8 @@ longlong_from_string (const char *str)
 
     while (*str) {
 	if (isdigit (*str)) {
-	    val += *str - '0';
 	    val *= 10;
+	    val += *str - '0';
 	} else if (!isspace (*str))
 	    break;
 	str++;
@@ -152,8 +152,8 @@ ulonglong_from_string (const char *str)
 
     while (*str) {
 	if (isdigit (*str)) {
-	    val += *str - '0';
 	    val *= 10;
+	    val += *str - '0';
 	} else if (!isspace (*str))
 	    break;
 	str++;

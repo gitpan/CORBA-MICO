@@ -189,6 +189,7 @@ debug_wait ()
     CODE:
     {
 	int wait = 1;
+        RETVAL = NULL;
 	fprintf(stderr, "Waiting...\n");
 	while (wait)
 	    ;

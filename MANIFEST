@@ -67,3 +67,4 @@ ccc/plans.txt
 examples/objecttest
 examples/pingo
 examples/states
+META.yml                                 Module meta-data (added by MakeMaker)

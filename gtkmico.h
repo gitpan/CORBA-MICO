@@ -25,6 +25,9 @@
 #define __mico_gtk_h__
 
 #include <gtk/gtk.h>
+#if defined(__IBMCPP__) || ( defined(__GNUC__) && __GNUC__ >= 3)
+using namespace std;
+#endif
 
 struct GtkFunctions {
     gint  (*gtk_main_iteration) (void);

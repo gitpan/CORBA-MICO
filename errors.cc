@@ -246,7 +246,7 @@ void
 pmico_setup_exception (const char *repoid, const char *pkg,
 		       const char *parent)
 {
-   string varname;
+    std::string varname;
    SV *sv;
 
    CM_DEBUG(("pmico_setup_exception(repoid='%s',pkg='%s',parent='%s')\n",repoid,pkg,parent));
@@ -257,11 +257,11 @@ pmico_setup_exception (const char *repoid, const char *pkg,
    else if (pmico_find_exception (repoid))
        return;
 
-   varname = string ( pkg ) + "::_repoid";
+   varname = std::string ( pkg ) + "::_repoid";
    sv = perl_get_sv ((char *)varname.c_str(), TRUE);
    sv_setsv (sv, newSVpv((char *)repoid, 0));
 
-   varname = string ( pkg ) + "::ISA";
+   varname = std::string ( pkg ) + "::ISA";
    AV *av = perl_get_av ((char *)varname.c_str(), TRUE);
    av_push (av, newSVpv((char *)parent, 0));
 

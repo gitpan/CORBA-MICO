@@ -268,7 +268,7 @@ sequence_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     if (!res->seq_put_begin(len)) return false;
 
     if (content_tc->kind() == CORBA::tk_octet) {
-	CORBA::Octet *buf = (CORBA::Octet *)SvPV(sv,PL_na);
+	CORBA::Octet *buf = (CORBA::Octet *)SvPVbyte(sv,PL_na);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    *res <<= CORBA::Any::from_octet(buf[i]);
     }
@@ -806,17 +806,23 @@ sequence_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     
     if (content_tc->kind() == CORBA::tk_octet) {
 	res = newSV(len);
-	CORBA::Octet *buf = (CORBA::Octet *)SvPV(res,PL_na);
-	SvCUR_set(res,len);
-	for (CORBA::ULong i = 0 ; i < len ; i++)
-	    if (!(*any >>= CORBA::Any::to_octet(buf[i]))) goto error;
+	SvPOK_only(res);
+	if( len ) {
+	  CORBA::Octet *buf = (CORBA::Octet *)SvPVX(res);
+	  SvCUR_set(res,len);
+	  for( CORBA::ULong i = 0 ; i < len ; i++ )
+	    if( !(*any >>= CORBA::Any::to_octet(buf[i])) ) goto error;
+	}
 
     } else if (content_tc->kind() == CORBA::tk_char) {
 	res = newSV(len);
-	CORBA::Char *buf = (CORBA::Char *)SvPV(res,PL_na);
-	SvCUR_set(res,len);
-	for (CORBA::ULong i = 0 ; i < len ; i++)
-	    if (!(*any >>= CORBA::Any::to_char(buf[i]))) goto error;
+	SvPOK_only(res);
+	if( len ) {
+	  CORBA::Char *buf = (CORBA::Char *)SvPVX(res);
+	  SvCUR_set(res,len);
+	  for( CORBA::ULong i = 0 ; i < len ; i++ )
+	    if( !(*any >>= CORBA::Any::to_char(buf[i])) ) goto error;
+	}
 
     } else {
 	AV *av = newAV();

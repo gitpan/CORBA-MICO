@@ -88,6 +88,11 @@ if ($Config{'osname'} eq "MSWin32") {
 # *******************************************************************
 
 else {
+
+    use Getopt::Long qw(:config gnu_compat);
+    my $ssl_libpath;
+    GetOptions( "with-ssl:s" => \$ssl_libpath );
+    
     my $mico_setup  = undef;
     my $gtk_cflags  = undef;
     
@@ -114,6 +119,9 @@ else {
     $MICOINC    = "-I$MICOPREFIX/include";
     $MICOLIBS   = "-L$MICOPREFIX/lib -lmico$MICOVERSION";
 
+    #There was some strange Perl version:
+    #$CCFLAGS .= '-DPERL_GCC_BRACE_GROUPS_FORBIDDEN';
+
     # Use Gtk or Not ?
     $gtk_cflags = `gtk-config --cflags`;
     undef $gtk_cflags if $?;
@@ -123,6 +131,12 @@ else {
         push @OBJECTS, 'gtkmico.o';
         $MICOINC    .= " $gtk_cflags";
         $DEFINE     .= ' -DHAVE_GTK';
+    }
+    
+    # ssl 
+    if( defined $ssl_libpath ) {
+        $ssl_libpath = '/usr/lib' if $ssl_libpath eq '';
+	$MICOLIBS .= " -L$ssl_libpath -lssl -lcrypto";
     }
     
     # some OS specific additions
@@ -168,9 +182,11 @@ WriteMakefile(
     'OPTIMIZE'      => $OPTIMIZE,
     'XSOPT'         => $XSOPT,
     'CCFLAGS'       => $CCFLAGS,
-    'LDDLFLAGS'     => $LDDLFLAGS,
     'MAP_TARGET'    => 'micoperl',
     'MAKEAPERL'     => 1,
     'dist'          => { COMPRESS=>"gzip", SUFFIX=>"gz" },
     'clean'         => { FILES=>"account.ref ChangeLog.bak" },
+    'PREREQ_PM'		=> {
+      'Error'       => 0.13,
+    }, 
 );

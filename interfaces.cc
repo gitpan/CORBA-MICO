@@ -55,7 +55,7 @@ store_interface_description (CORBA::InterfaceDef *iface)
 						   desc);
 	hv_store (hv, (char *)repoid, len, newSViv((IV)info), 0);
 	
-	SV *pkg_sv = perl_get_sv ( (char *)(string (pkg) + "::" + repoid_key).c_str(), TRUE );
+	SV *pkg_sv = perl_get_sv ( (char *)(std::string (pkg) + "::" + repoid_key).c_str(), TRUE );
 	sv_setpv (pkg_sv, repoid);
 	return info;
     }
@@ -103,7 +103,7 @@ XS(_pmico_callStub)
 
     SV **repoidp;
     char *repoid;
-    string name;
+    std::string name;
     CORBA::ULong i,j;
 
     I32 index = XSANY.any_i32;
@@ -122,11 +122,11 @@ XS(_pmico_callStub)
     CORBA::InterfaceDef::FullInterfaceDescription *desc = info->desc;
   
     if (index >= OPERATION_BASE && index < GETTER_BASE) {
-	name = string ( desc->operations[index-OPERATION_BASE].name );
+	name = std::string ( desc->operations[index-OPERATION_BASE].name );
     } else if (index >= GETTER_BASE && index < SETTER_BASE) {
-	name = "_get_" + string ( desc->attributes[index-GETTER_BASE].name );
+	name = "_get_" + std::string ( desc->attributes[index-GETTER_BASE].name );
     } else if (index >= SETTER_BASE) {
-	name = "_set_" + string ( desc->attributes[index-SETTER_BASE].name );
+	name = "_set_" + std::string ( desc->attributes[index-SETTER_BASE].name );
     }
 
     // Get the discriminator 
@@ -137,6 +137,10 @@ XS(_pmico_callStub)
 	      HvNAME(CvSTASH(cv)), name.c_str ());
 
     obj = pmico_sv_to_objref(ST(0)); // may croak
+    if( CORBA::is_nil (obj) )
+      croak("%s::%s is nil object",
+	    HvNAME(CvSTASH(cv)), name.c_str ());
+
 
     // Form the request
 
@@ -294,7 +298,7 @@ define_exception (const char *repoid)
 static void
 define_method (const char *pkg, const char *prefix, const char *name, I32 index)
 {
-    string fullname = string (pkg) + prefix + name;
+    std::string fullname = std::string (pkg) + prefix + name;
     if( perl_get_cv( (char *)fullname.c_str(), 0 ) ) {
       return;
     }
@@ -381,7 +385,7 @@ pmico_init_interface (CORBA::InterfaceDef *iface, const char *id)
     // Create a package method that will allow us to determine the
     // repository id before we have the MICO object set up
 
-    string fullname = "POA_" + info->pkg + "::_pmico_repoid";
+    std::string fullname = "POA_" + info->pkg + "::_pmico_repoid";
     CV *method_cv = newXS ((char *)fullname.c_str(), _pmico_repoid, __FILE__);
     CvXSUBANY(method_cv).any_ptr = (void *)newSVpv((char *)id, 0);
 
@@ -449,7 +453,7 @@ pmico_load_contained (CORBA::Contained *_contained, CORBA::ORB_ptr _orb,
 	    container->contents (CORBA::dk_Constant, true);
 
 	if (contents->length() > 0) {
-	    string pkgname;
+	  std::string pkgname;
 
 	    if (retval)
 		pkgname = retval->pkg.c_str();

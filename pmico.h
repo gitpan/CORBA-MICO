@@ -27,14 +27,14 @@ void newCONSTSUB(HV *stash, char *name, SV *sv);
 
 // Encapsulates Perl/MICO's knowledge about a particular interface
 struct PMicoIfaceInfo {
-    PMicoIfaceInfo (string _pkg, 
+    PMicoIfaceInfo (std::string _pkg, 
 		    CORBA::InterfaceDef *_iface,
 		    CORBA::InterfaceDef::FullInterfaceDescription *_desc)
 
 	: pkg(_pkg), iface(_iface), desc(_desc)
     {
     }
-    string pkg;			// owned
+    std::string pkg;			// owned
     CORBA::InterfaceDef_var iface; // owned
     CORBA::InterfaceDef::FullInterfaceDescription_var desc; // owned
 };

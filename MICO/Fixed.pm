@@ -16,6 +16,7 @@ require Math::BigInt;
 sub _construct {
     my ($class, $value, $scale) = @_;
 
+    $value = '+' . $value if $value =~ /^\d/;
     bless {
 	    v  => $value,
 	   's' => $scale,
@@ -181,6 +182,7 @@ sub to_digits {
 	    } else {
 		$vstr = "" . new Math::BigInt ($value + (($rest < $half) ? 0 : 1));
 	    }
+	    $vstr = '+' . $vstr if $vstr =~ /^\d/;
 	}
     } else {
 	$vstr .= '0' x ($scale - $self->{'s'});

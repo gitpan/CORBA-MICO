@@ -105,7 +105,7 @@ pmico_servant_to_sv (PortableServer::Servant servant)
     return newSVsv(&PL_sv_undef);
 }
 
-static string
+static std::string
 pmico_get_repoid (SV *perlobj)
 {
     char *result;
@@ -278,6 +278,7 @@ static CORBA::Exception *
 pmico_call_method (const char *name, int return_items, CORBA::ExcDescriptionSeq  *exceptions) 
 {
     dSP;
+    CM_DEBUG(("pmico_call_method(%s)\n",name));
 
     GV *throwngv = gv_fetchpv("Error::THROWN", TRUE, SVt_PV);
     save_scalar (throwngv);	// assume enclosing scope
@@ -375,7 +376,7 @@ PMicoAdapterActivator::unknown_adapter (PortableServer::POA_ptr parent,
 					const char *            name)
 {
     CORBA::Exception *exception;
-    CORBA::Boolean retval;
+    CORBA::Boolean retval = 0;
 
     dSP;
 
@@ -412,15 +413,24 @@ PMicoAdapterActivator::unknown_adapter (PortableServer::POA_ptr parent,
     return retval;
 }
 
+PMicoServantActivator::PMicoServantActivator(SV *_perlobj)
+{
+    assert (SvROK(_perlobj));
+
+    this->thx = PERL_GET_THX;
+    this->perlobj = SvRV(_perlobj);
+}
+
 PortableServer::Servant
 PMicoServantActivator::incarnate (const PortableServer::ObjectId& oid,
 				  PortableServer::POA_ptr         adapter)
 {
-    PortableServer::Servant retval;
+    PortableServer::Servant retval = 0;
     CORBA::Exception *exception;
 
     init_forward_request();
     
+    PERL_SET_CONTEXT(this->thx);
     dSP;
 
     ENTER;
@@ -465,6 +475,7 @@ PMicoServantActivator::etherealize (const PortableServer::ObjectId& oid,
 				    CORBA::Boolean                  remaining_activations)
 {
     CORBA::Exception *exception;
+    PERL_SET_CONTEXT(this->thx);
     dSP;
 
     ENTER;
@@ -594,7 +605,8 @@ PMicoServant::PMicoServant (SV *_perlobj)
 {
     assert (SvROK(_perlobj));
 
-    string repoid = pmico_get_repoid (_perlobj);
+    this->thx = PERL_GET_THX;
+    std::string repoid = pmico_get_repoid (_perlobj);
     PMicoIfaceInfo *info = pmico_find_interface_description (repoid.c_str());
     
     if (!info)
@@ -735,6 +747,7 @@ PMicoServant::builtin_invoke (CORBA::ServerRequest_ptr svreq)
 void    
 PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 {
+    PERL_SET_CONTEXT(this->thx);
     dSP;
 
     int return_items = 0;	// includes return, if any
@@ -744,6 +757,7 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
     CORBA::ExcDescriptionSeq *exceptions;
 
     const char *name = _req->op_name();
+    CM_DEBUG(("PMicoServant::invoke(%s)\n",name));
 
     if (!perlobj) {
 	_req->exception (CORBA::SystemException::_create_sysex("IDL:omg.org/CORBA/OBJECT_NOT_EXIST:1.0", 
