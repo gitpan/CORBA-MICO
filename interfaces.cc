@@ -111,7 +111,7 @@ XS(_pmico_callStub)
     if (!repoidp)
 	croak("_pmico_callStub called with bad package (no %s)",repoid_key);
     
-    repoid = SvPV(GvSV(*repoidp), na);
+    repoid = SvPV(GvSV(*repoidp), PL_na);
     
     PMicoIfaceInfo *info = pmico_find_interface_description (repoid);
 
@@ -145,48 +145,50 @@ XS(_pmico_callStub)
         CORBA::OperationDescription *opr = &desc->operations[index-OPERATION_BASE];
 	j = 1;
 	for (i = 0 ; i<opr->parameters.length() ; i++) {
-	    SV *arg = (j<(CORBA::ULong)items) ? ST(j) : &sv_undef;
-	    CORBA::Any *argany;
+	    SV *arg = (j<(CORBA::ULong)items) ? ST(j) : &PL_sv_undef;
 
 	    switch (opr->parameters[i].mode) {
 	    case CORBA::PARAM_IN:
-		argany = &req->add_in_arg ( opr->parameters[i].name );
-		argany->type ( opr->parameters[i].type );
-		if (!pmico_to_any ( argany , arg ))
+		{
+		  CORBA::Any_var argany = new CORBA::Any(opr->parameters[i].type, 0 );
+		  if (!pmico_to_any ( argany , arg ))
 		    croak ("Error marshalling parameter '%s'",
 			   (char *)opr->parameters[i].name);
+		  req->add_in_arg ( opr->parameters[i].name ) = *argany;
+		}
 		j++;
 		break;
 	    case CORBA::PARAM_INOUT:
 		if (!SvROK(arg))
 		    croak ("INOUT parameter must be a reference");
-		argany = &req->add_in_arg ( opr->parameters[i].name );
-		argany->type ( opr->parameters[i].type );
-		if (!pmico_to_any ( argany , SvRV(arg) ))
-		    croak ("Error marshalling parameter '%s'",
-			   (char *)opr->parameters[i].name);
+		{
+		  CORBA::Any_var argany = new CORBA::Any(opr->parameters[i].type, 0 );
+		  if (!pmico_to_any ( argany , SvRV(arg) ))
+		      croak ("Error marshalling parameter '%s'",
+			     (char *)opr->parameters[i].name);
+		  req->add_in_arg ( opr->parameters[i].name ) = *argany;
+		}
 		j++;
 		break;
 	    case CORBA::PARAM_OUT:
-		argany = &req->add_out_arg ( opr->parameters[i].name );
-		argany->type ( opr->parameters[i].type );
+		req->add_out_arg().set_type( opr->parameters[i].type );
 		break;
 	    }
 	}
-	req->result()->value()->type ( opr->result );
+	req->result()->value()->set_type ( opr->result );
 
     } else if (index >= GETTER_BASE && index < SETTER_BASE) {
-	req->result()->value()->type ( desc->attributes[index-GETTER_BASE].type );
+	req->result()->value()->set_type ( desc->attributes[index-GETTER_BASE].type );
 
     } else if (index >= SETTER_BASE) {
         if (items < 2)
 	  croak("%s::%s called without second argument",
 		HvNAME(CvSTASH(cv)), name.c_str ());
 
-	CORBA::Any *argany = &req->add_in_arg( "_value" );
-	argany->type ( desc->attributes[index-SETTER_BASE].type );
+	CORBA::Any_var argany = new CORBA::Any(desc->attributes[index-SETTER_BASE].type, 0 );
 	if (!pmico_to_any (argany, ST(1)))
 	    croak ("Error marshalling attribute value");
+	req->add_in_arg ( "_value" ) = *argany;
 
 	req->result()->value()->type ( CORBA::_tc_void );
     }
@@ -216,7 +218,7 @@ XS(_pmico_callStub)
 	if (res)
 	  ST(0) = sv_2mortal(res);	// we have at least 1 argument
 	else
-	  ST(0) = &sv_undef;
+	  ST(0) = &PL_sv_undef;
 	return_count++;
     }
 
@@ -231,7 +233,7 @@ XS(_pmico_callStub)
 	    if (res)
 	      sv_setsv (SvRV(ST(j)), res);
 	    else
-	      sv_setsv (SvRV(ST(j)), &sv_undef);
+	      sv_setsv (SvRV(ST(j)), &PL_sv_undef);
 	    j++;
 	} else if (item->flags () & CORBA::ARG_IN) {
 	    j++;
@@ -247,7 +249,7 @@ XS(_pmico_callStub)
 	    if (res)
 	      ST(return_count) = sv_2mortal (res);
 	    else
-	      ST(return_count) = &sv_undef;
+	      ST(return_count) = &PL_sv_undef;
 	    return_count++;
 	}
     }

@@ -16,7 +16,7 @@ pmico_objref_to_sv (CORBA::Object *obj)
 {
     if (CORBA::is_nil (obj))
 	// FIXME: memory leaks?
-	return newSVsv(&sv_undef);
+	return newSVsv(&PL_sv_undef);
 
     char buf[24];
     sprintf(buf, "%ld", (IV)obj);
@@ -205,10 +205,10 @@ octet_to_any (CORBA::Any *res, SV *sv)
 static bool
 enum_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    CORBA::Long ind = tc->member_index (SvPV(sv, na));
+    CORBA::Long ind = tc->member_index (SvPV(sv, PL_na));
 
     if (ind < 0) {
-	warn ("Invalid enumeration value '%s'", SvPV(sv,na));
+	warn ("Invalid enumeration value '%s'", SvPV(sv,PL_na));
 	return false;
     }
 
@@ -267,12 +267,12 @@ sequence_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     if (!res->seq_put_begin(len)) return false;
 
     if (content_tc->kind() == CORBA::tk_octet) {
-	CORBA::Octet *buf = (CORBA::Octet *)SvPV(sv,na);
+	CORBA::Octet *buf = (CORBA::Octet *)SvPV(sv,PL_na);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    *res <<= CORBA::Any::from_octet(buf[i]);
     }
     else if (content_tc->kind() == CORBA::tk_char) {
-	CORBA::Char *buf = (CORBA::Char *)SvPV(sv,na);
+	CORBA::Char *buf = (CORBA::Char *)SvPV(sv,PL_na);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    *res <<= CORBA::Any::from_char(buf[i]);
     }
@@ -476,7 +476,7 @@ alias_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 static bool
 string_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    *res <<= CORBA::Any::from_string(SvPV(sv, na), tc->length(), false);
+    *res <<= CORBA::Any::from_string(SvPV(sv, PL_na), tc->length(), false);
     return true;
 }
 
@@ -732,7 +732,7 @@ boolean_from_any (CORBA::Any *any)
     CORBA::Boolean v;
     *any >>= CORBA::Any::to_boolean(v);
 
-    return newSVsv(v?&sv_yes:&sv_no);
+    return newSVsv(v?&PL_sv_yes:&PL_sv_no);
 }
 
 static SV *
@@ -804,14 +804,14 @@ sequence_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     
     if (content_tc->kind() == CORBA::tk_octet) {
 	res = newSV(len);
-	CORBA::Octet *buf = (CORBA::Octet *)SvPV(res,na);
+	CORBA::Octet *buf = (CORBA::Octet *)SvPV(res,PL_na);
 	SvCUR_set(res,len);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    if (!(*any >>= CORBA::Any::to_octet(buf[i]))) goto error;
 
     } else if (content_tc->kind() == CORBA::tk_char) {
 	res = newSV(len);
-	CORBA::Char *buf = (CORBA::Char *)SvPV(res,na);
+	CORBA::Char *buf = (CORBA::Char *)SvPV(res,PL_na);
 	SvCUR_set(res,len);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    if (!(*any >>= CORBA::Any::to_char(buf[i]))) goto error;
@@ -943,7 +943,7 @@ union_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 	av_push (av,res);
 
     } else {
-	av_push (av, &sv_undef);
+	av_push (av, &PL_sv_undef);
     }
     
     if (!any->union_get_end())
@@ -961,7 +961,7 @@ static SV *
 any_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     CORBA::Any *a = new CORBA::Any;
-    *any >>= *a;
+    *a = *any; //*any >>= *a;
 
     SV *res = newSV(0);
     return sv_setref_pv (res, "CORBA::Any", (void *)a);
@@ -977,7 +977,7 @@ alias_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 static SV *
 string_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
-    char *result;
+    const char *result = 0;
     SV *sv = NULL;
 
     if (*any >>= CORBA::Any::to_string (result, tc->length()))
@@ -1091,7 +1091,7 @@ sv_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     switch (tc->kind()) {
     case CORBA::tk_null:
-	return newSVsv(&sv_undef);
+	return newSVsv(&PL_sv_undef);
     case CORBA::tk_void:
 	return NULL;
     case CORBA::tk_short:

@@ -219,7 +219,7 @@ pmico_find_exception (const char *repoid)
     if (!svp)
 	return NULL;
 
-    return SvPV(*svp, na);
+    return SvPV(*svp, PL_na);
 }
 
 void

@@ -3,15 +3,15 @@
 #define LL_VALUE(sv) (*(long long *) &SvNVX (sv))
 #define SvLLV(sv) (sv_isa (sv, "CORBA::LongLong") ? \
 		    LL_VALUE (SvRV (sv)) : \
-		    longlong_from_string (SvPV (sv, na)))
+		    longlong_from_string (SvPV (sv, PL_na)))
 #define ULL_VALUE(sv) (*(unsigned long long *) &SvNVX (sv))
 #define SvULLV(sv) (sv_isa (sv, "CORBA::ULongLong") ? \
 		    ULL_VALUE (SvRV (sv)) : \
-		    ulonglong_from_string (SvPV (sv, na)))
+		    ulonglong_from_string (SvPV (sv, PL_na)))
 #define LD_VALUE(sv) (*(long double *) SvPVX (sv))
 #define SvLDV(sv) (sv_isa (sv, "CORBA::LongDouble") ? \
 		    LD_VALUE (SvRV (sv)) : \
-		    longdouble_from_string (SvPV (sv, na)))
+		    longdouble_from_string (SvPV (sv, PL_na)))
 
 SV *ll_from_longlong (long long val);
 long long longlong_from_string (const char *str);

@@ -51,5 +51,6 @@ WriteMakefile(
     'XSOPT'     => '-C++',
     'MAP_TARGET' => 'micoperl',
     'MAKEAPERL' => 1,
-    'dist'      => { COMPRESS=>"gzip", SUFFIX=>"gz" }
+    'dist'      => { COMPRESS=>"gzip", SUFFIX=>"gz" },
+    'clean'	=> { FILES=>"account.ref ChangeLog.bak" },
 );

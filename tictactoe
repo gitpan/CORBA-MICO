@@ -76,7 +76,7 @@ sub connect {
     }
 
     $self->{opponent} = $opponent;
-    $self->{tag} = rand(2**31);		# badly "insecure" before 5.004
+    $self->{tag} = int(rand(2**31));	# badly "insecure" before 5.004
 
     $self->start_over;
     $self->set_status;

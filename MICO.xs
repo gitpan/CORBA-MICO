@@ -199,9 +199,9 @@ ORB_init (id)
 	
 	    argc = av_len(ARGV)+2;
 	    argv = (char **)malloc (sizeof(char *)*argc);
-	    argv[0] = SvPV (ARGV0, na);
+	    argv[0] = SvPV (ARGV0, PL_na);
 	    for (i=0;i<=av_len(ARGV);i++)
-		argv[i+1] = SvPV(*av_fetch(ARGV, i, 0), na);
+		argv[i+1] = SvPV(*av_fetch(ARGV, i, 0), PL_na);
 	
 	    RETVAL = CORBA::ORB_init (argc, argv, id);
 	    
@@ -225,7 +225,7 @@ new (pkg, type, value)
     SV *value
     CODE:
     RETVAL = new CORBA::Any;
-    RETVAL->type(type);
+    RETVAL->set_type(type);
     if (!pmico_to_any (RETVAL, value)) {
         delete RETVAL;
 	croak("Error constructing Any");
@@ -662,7 +662,7 @@ new (Class, str)
     RETVAL
 
 SV *
-stringify (self, other=0, reverse=&sv_undef)
+stringify (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CODE:
     {
@@ -674,7 +674,7 @@ stringify (self, other=0, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-add (self, other, reverse=&sv_undef)
+add (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     CODE:
@@ -683,7 +683,7 @@ add (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-subtract (self, other, reverse=&sv_undef)
+subtract (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     SV *reverse
@@ -696,7 +696,7 @@ subtract (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-div (self, other, reverse=&sv_undef)
+div (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     SV *reverse
@@ -709,7 +709,7 @@ div (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-mul (self, other, reverse=&sv_undef)
+mul (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     CODE:
@@ -718,7 +718,7 @@ mul (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-mod (self, other, reverse=&sv_undef)
+mod (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     SV *reverse
@@ -731,7 +731,7 @@ mod (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-neg (self, other=0, reverse=&sv_undef)
+neg (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CODE:
     RETVAL = -self;
@@ -739,7 +739,7 @@ neg (self, other=0, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongLong
-abs (self, other=0, reverse=&sv_undef)
+abs (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CODE:
     RETVAL = (self > 0) ? self : -self;
@@ -747,7 +747,7 @@ abs (self, other=0, reverse=&sv_undef)
     RETVAL
 
 int
-cmp (self, other, reverse=&sv_undef)
+cmp (self, other, reverse=&PL_sv_undef)
     CORBA::LongLong self
     CORBA::LongLong other
     SV *reverse
@@ -770,7 +770,7 @@ new (Class, str)
     RETVAL
 
 SV *
-stringify (self, other=0, reverse=&sv_undef)
+stringify (self, other=0, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CODE:
     {
@@ -782,7 +782,7 @@ stringify (self, other=0, reverse=&sv_undef)
     RETVAL
 
 CORBA::ULongLong
-add (self, other, reverse=&sv_undef)
+add (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     CODE:
@@ -791,7 +791,7 @@ add (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::ULongLong
-subtract (self, other, reverse=&sv_undef)
+subtract (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     SV *reverse
@@ -804,7 +804,7 @@ subtract (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::ULongLong
-div (self, other, reverse=&sv_undef)
+div (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     SV *reverse
@@ -817,7 +817,7 @@ div (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::ULongLong
-mul (self, other, reverse=&sv_undef)
+mul (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     CODE:
@@ -826,7 +826,7 @@ mul (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::ULongLong
-mod (self, other, reverse=&sv_undef)
+mod (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     SV *reverse
@@ -839,7 +839,7 @@ mod (self, other, reverse=&sv_undef)
     RETVAL
 
 int
-cmp (self, other, reverse=&sv_undef)
+cmp (self, other, reverse=&PL_sv_undef)
     CORBA::ULongLong self
     CORBA::ULongLong other
     SV *reverse
@@ -862,7 +862,7 @@ new (Class, str)
     RETVAL
 
 SV *
-stringify (self, other=0, reverse=&sv_undef)
+stringify (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CODE:
     {
@@ -874,7 +874,7 @@ stringify (self, other=0, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-add (self, other, reverse=&sv_undef)
+add (self, other, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CORBA::LongDouble other
     CODE:
@@ -883,7 +883,7 @@ add (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-subtract (self, other, reverse=&sv_undef)
+subtract (self, other, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CORBA::LongDouble other
     SV *reverse
@@ -896,7 +896,7 @@ subtract (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-div (self, other, reverse=&sv_undef)
+div (self, other, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CORBA::LongDouble other
     SV *reverse
@@ -909,7 +909,7 @@ div (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-mul (self, other, reverse=&sv_undef)
+mul (self, other, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CORBA::LongDouble other
     CODE:
@@ -918,7 +918,7 @@ mul (self, other, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-neg (self, other=0, reverse=&sv_undef)
+neg (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CODE:
     RETVAL = -self;
@@ -926,7 +926,7 @@ neg (self, other=0, reverse=&sv_undef)
     RETVAL
 
 CORBA::LongDouble
-abs (self, other=0, reverse=&sv_undef)
+abs (self, other=0, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CODE:
     RETVAL = (self > 0) ? self : -self;
@@ -934,7 +934,7 @@ abs (self, other=0, reverse=&sv_undef)
     RETVAL
 
 int
-cmp (self, other, reverse=&sv_undef)
+cmp (self, other, reverse=&PL_sv_undef)
     CORBA::LongDouble self
     CORBA::LongDouble other
     SV *reverse
@@ -1234,7 +1234,7 @@ PortableServer::POA::id_to_reference (id)
     RETVAL
 
 void
-PortableServer::POA::DESTROY (id)
+PortableServer::POA::DESTROY ()
     CODE:
     CORBA::release (THIS);
 

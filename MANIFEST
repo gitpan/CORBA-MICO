@@ -1,5 +1,6 @@
 Account.idl
 ChangeLog
+ChangeLog.owen
 LICENSE-LGPL
 MANIFEST
 MICO.pm
@@ -17,7 +18,6 @@ Performance
 README
 TODO
 Tictactoe.idl
-account.ref
 client
 client-activate
 constsub.c

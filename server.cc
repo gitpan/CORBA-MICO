@@ -102,7 +102,7 @@ pmico_servant_to_sv (PortableServer::Servant servant)
     }
     
     // FIXME: memory leaks?
-    return newSVsv(&sv_undef);
+    return newSVsv(&PL_sv_undef);
 }
 
 static string
@@ -219,7 +219,7 @@ pmico_encode_exception (const char *               name,
 	CORBA::CompletionStatus status;
 	svp = hv_fetch((HV *)SvRV(perl_except), "-status", 7, 0);
 	if (svp) {
-	    char *cstr = SvPV(*svp, na);
+	    char *cstr = SvPV(*svp, PL_na);
 
 	    if (!strcmp(cstr,"COMPLETED_YES"))
 		status = CORBA::COMPLETED_YES;
@@ -252,7 +252,7 @@ pmico_encode_exception (const char *               name,
 		if (!strcmp ((*exceptions)[i].id, repoid)) {
 		    
 		    CORBA::Any *any = new CORBA::Any;
-		    any->type ((*exceptions)[i].type);
+		    any->set_type ((*exceptions)[i].type);
 		    if (pmico_to_any (any, perl_except))
 			return new CORBA::UnknownUserException (any);
 		    else {
@@ -277,7 +277,7 @@ pmico_call_method (const char *name, int return_items, CORBA::ExcDescriptionSeq 
     GV *throwngv = gv_fetchpv("Error::THROWN", TRUE, SVt_PV);
     save_scalar (throwngv);	// assume enclosing scope
 
-    sv_setsv (GvSV(throwngv), &sv_undef);
+    sv_setsv (GvSV(throwngv), &PL_sv_undef);
 
     int return_count = perl_call_method ((char *)name, G_EVAL |
 					 ((return_items == 0) ? G_VOID :
@@ -295,7 +295,7 @@ pmico_call_method (const char *name, int return_items, CORBA::ExcDescriptionSeq 
 	    return pmico_encode_exception (name, GvSV(throwngv), exceptions);
 	    SPAGAIN;
 	} else {
-	    warn ("Error occured in implementation of '%s': %s", name, SvPV(ERRSV,na));
+	    warn ("Error occured in implementation of '%s': %s", name, SvPV(ERRSV,PL_na));
 	    return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
 	}
     }
@@ -381,7 +381,8 @@ PMicoAdapterActivator::unknown_adapter (PortableServer::POA_ptr parent,
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     SV *tmp = sv_newmortal();
-    sv_setref_pv(tmp, "PortableServer::POA", (void *)parent);
+    PortableServer::POA_ptr prnt = PortableServer::POA::_duplicate(parent);
+    sv_setref_pv(tmp, "PortableServer::POA", (void *)prnt);
     XPUSHs(tmp);
     XPUSHs(sv_2mortal(newSVpv((char *)name, 0)));
 
@@ -426,7 +427,8 @@ PMicoServantActivator::incarnate (const PortableServer::ObjectId& oid,
     
     XPUSHs(sv_2mortal(pmico_oid_to_sv (&oid)));
     SV *tmp = sv_newmortal();
-    sv_setref_pv(tmp, "PortableServer::POA", (void *)adapter);
+    PortableServer::POA_ptr adptr = PortableServer::POA::_duplicate(adapter);
+    sv_setref_pv(tmp, "PortableServer::POA", (void *)adptr);
     XPUSHs(tmp);
 
     PUTBACK;
@@ -469,7 +471,8 @@ PMicoServantActivator::etherealize (const PortableServer::ObjectId& oid,
     
     XPUSHs(sv_2mortal(pmico_oid_to_sv (&oid)));
     SV *tmp = sv_newmortal();
-    sv_setref_pv(tmp, "PortableServer::POA", (void *)adapter);
+    PortableServer::POA_ptr adptr = PortableServer::POA::_duplicate(adapter);
+    sv_setref_pv(tmp, "PortableServer::POA", (void *)adptr);
     XPUSHs(tmp);
     XPUSHs(sv_2mortal(pmico_servant_to_sv (serv)));
     XPUSHs(cleanup_in_progress ? &PL_sv_yes : &PL_sv_no);
@@ -508,7 +511,8 @@ PMicoServantLocator::preinvoke (const PortableServer::ObjectId& oid,
     
     XPUSHs(sv_2mortal(pmico_oid_to_sv (&oid)));
     SV *tmp = sv_newmortal();
-    sv_setref_pv(tmp, "PortableServer::POA", (void *)adapter);
+    PortableServer::POA_ptr adptr = PortableServer::POA::_duplicate(adapter);
+    sv_setref_pv(tmp, "PortableServer::POA", (void *)adptr);
     XPUSHs(tmp);
     XPUSHs(sv_2mortal(newSVpv((char *)operation, 0)));
 
@@ -556,7 +560,8 @@ PMicoServantLocator::postinvoke (const PortableServer::ObjectId& oid,
     
     XPUSHs(sv_2mortal(pmico_oid_to_sv (&oid)));
     SV *tmp = sv_newmortal();
-    sv_setref_pv(tmp, "PortableServer::POA", (void *)adapter);
+    PortableServer::POA_ptr adptr = PortableServer::POA::_duplicate(adapter);
+    sv_setref_pv(tmp, "PortableServer::POA", (void *)adptr);
     XPUSHs(tmp);
     XPUSHs(sv_2mortal(newSVpv((char *)operation, 0)));
     XPUSHs(sv_2mortal(pmico_servant_to_sv (serv)));
@@ -659,7 +664,7 @@ PMicoServant::build_args ( const char *name, int &return_items,
 	if (attr_desc) {
 	    args = new CORBA::NVList ();
 	    args->add ( CORBA::ARG_IN );
-	    args->item ( 0 )->value()->type( attr_desc->type );
+	    args->item ( 0 )->value()->set_type( attr_desc->type );
 	}
     } else if (!strncmp( name, "_get_", 5)) {
 	CORBA::AttributeDescription *attr_desc = find_attribute(desc, name+5, FALSE);
@@ -688,7 +693,7 @@ PMicoServant::build_args ( const char *name, int &return_items,
 		    inout_items++;
 		    break;
 		}
-		args->item(i)->value()->type(op_desc->parameters[i].type);
+		args->item(i)->value()->set_type(op_desc->parameters[i].type);
 
 	    }
 	    if (op_desc->result->kind() != CORBA::tk_void) {
@@ -808,7 +813,7 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
     
 	if (return_type != NULL) {
 	    CORBA::Any *res = new CORBA::Any;
-	    res->type (return_type);
+	    res->set_type (return_type);
 	    if (pmico_to_any (res, *(sp+1)))
 		_req->result (res);
 	    else {
