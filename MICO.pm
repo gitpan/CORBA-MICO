@@ -14,7 +14,7 @@ require CORBA::MICO::LongDouble;
 
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.2';
+$VERSION = '0.5.0';
 
 bootstrap CORBA::MICO $VERSION;
 
@@ -36,13 +36,20 @@ sub import {
 	    } 
 	}
     }
+
+    if (exists $keys{'wait'}) {
+	CORBA::MICO::debug_wait();
+    }
+
 }
 
 package CORBA::Object;
 
+use Carp;
+
 use vars qw($AUTOLOAD);
 sub AUTOLOAD {
-    my $self = $_[0];
+    my ($self, @rest) = @_;
 
     my ($method) = $AUTOLOAD =~ /.*::([^:]+)/;
 
@@ -53,27 +60,34 @@ sub AUTOLOAD {
     }
 
     my $id = $self->_repoid;
-    
-    if (exists $CORBA::MICO::_interfaces{$id}) {
-	print STDERR "Already loaded $id\n";
-	die "No such method\n";
-    } else {
-#	print STDERR "Loading $id\n";
+
+    my $newclass = CORBA::MICO::find_interface ($id);
+
+    if (!defined $newclass) {
 	my $iface = $self->_get_interface;
 	defined $iface or print "Can't get interface\n";
-	my $newclass = CORBA::MICO::load_interface ($iface);
+	$newclass = CORBA::MICO::load_interface ($iface);
+    }
 
-	bless $self, $newclass;
-	
+    defined $newclass or die "Can't get interface interformation";
+
+    my ($oldclass) = "$self" =~ /:*([^=]*)/;
+    $oldclass ne $newclass or 
+	croak qq(Can\'t locate object method "$method" via package "$oldclass");
+    
+    bless $self, $newclass;
+
 #       The following goto doesn't work for some reason - 
 #       the mark stack isn't set correctly.
 #	goto &{"$ {newclass}::$ {method}"};
-	&{"$ {newclass}::$ {method}"}(@_);
-    }
+
+# This is decent, but gets the call stack wrong
+    $self->$method(@rest);
 }
 
-# Default - don't save object at all
-sub _save_object { 0; }
+@POA_PortableServer::ServantActivator::ISA = qw(PortableServer::ServantBase);
+@POA_PortableServer::ServantLocator::ISA = qw(PortableServer::ServantBase);
+@POA_PortableServer::AdapterActivator::ISA = qw(PortableServer::ServantBase);
 
 package CORBA::MICO::GtkDispatcher;
 

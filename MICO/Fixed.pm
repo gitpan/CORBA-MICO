@@ -1,5 +1,8 @@
 package CORBA::Fixed;
 
+# Perl5.004 and earlier complain about $self->{s}, so we use
+# $self->{'s'} throughout (ugly...)
+
 use overload 
     '+' => \&add,
     '-' => \&subtract,
@@ -14,8 +17,8 @@ sub _construct {
     my ($class, $value, $scale) = @_;
 
     bless {
-	   v => $value,
-	   s => $scale,
+	    v  => $value,
+	   's' => $scale,
 	  }, $class;
 }
 
@@ -57,12 +60,12 @@ sub add {
 
     my ($v, $s);
     
-    if ($a->{s} > $b->{s}) {
-	$s = $a->{s};
-	$v = $a->{v} + ($b->{v}.("0" x ($a->{s} - $b->{s})));
+    if ($a->{'s'} > $b->{'s'}) {
+	$s = $a->{'s'};
+	$v = $a->{v} + ($b->{v}.("0" x ($a->{'s'} - $b->{'s'})));
     } else {
-	$s = $b->{s};
-	$v = $b->{v} + ($a->{v}.("0" x ($b->{s} - $a->{s})));
+	$s = $b->{'s'};
+	$v = $b->{v} + ($a->{v}.("0" x ($b->{'s'} - $a->{'s'})));
     }
 
     CORBA::Fixed->_construct ($v, $s);
@@ -84,12 +87,12 @@ sub subtract {
     {
 	local $^W = 0;		# BigInt.pm problems
 
-	if ($a->{s} > $b->{s}) {
-	    $s = $a->{s};
-	    $v = $a->{v} - ($b->{v}.("0" x ($a->{s} - $b->{s})));
+	if ($a->{'s'} > $b->{'s'}) {
+	    $s = $a->{'s'};
+	    $v = $a->{v} - ($b->{v}.("0" x ($a->{'s'} - $b->{'s'})));
 	} else {
-	    $s = $b->{s};
-	    $v = ($a->{v}.("0" x ($b->{s} - $a->{s}))) - $b->{v};
+	    $s = $b->{'s'};
+	    $v = ($a->{v}.("0" x ($b->{'s'} - $a->{'s'}))) - $b->{v};
 	}
     }
     CORBA::Fixed->_construct ($v, $s);
@@ -106,10 +109,10 @@ sub compare {
 	($a, $b) = ($b, $a);
     }
     
-    if ($a->{s} > $b->{s}) {
-	$a->{v} <=> ($b->{v}.("0" x ($a->{s} - $b->{s})));
+    if ($a->{'s'} > $b->{'s'}) {
+	$a->{v} <=> ($b->{v}.("0" x ($a->{'s'} - $b->{'s'})));
     } else {
-	($a->{v}.("0" x ($b->{s} - $a->{s}))) <=> $b->{v};
+	($a->{v}.("0" x ($b->{'s'} - $a->{'s'}))) <=> $b->{v};
     }
 }
 
@@ -120,7 +123,7 @@ sub mul {
 	$b = CORBA::Fixed->from_string($b);
     }
 
-    CORBA::Fixed->_construct ($a->{v}*$b->{v}, $a->{s}+$b->{s});
+    CORBA::Fixed->_construct ($a->{v}*$b->{v}, $a->{'s'}+$b->{'s'});
 }
 
 sub div {
@@ -136,7 +139,7 @@ sub div {
     
     # calculate to 31 places
 
-    my $s = ($a->{s} - $b->{s});
+    my $s = ($a->{'s'} - $b->{'s'});
 
     my $v1 = $a->{v};
     my $v2 = $b->{v};
@@ -163,9 +166,9 @@ sub to_digits {
     my $value = $self->{v};
     my $vstr = "$value";
     
-    if ($self->{s} > $scale) {
-	my $rest = substr($vstr, -($self->{s} - $scale));
-	substr($vstr, -($self->{s} - $scale)) = "";
+    if ($self->{'s'} > $scale) {
+	my $rest = substr($vstr, -($self->{'s'} - $scale));
+	substr($vstr, -($self->{'s'} - $scale)) = "";
 
 	# Banker's rounding
 	if (length ($rest) > 0) {
@@ -180,7 +183,7 @@ sub to_digits {
 	    }
 	}
     } else {
-	$vstr .= '0' x ($scale - $self->{s});
+	$vstr .= '0' x ($scale - $self->{'s'});
     }
 
     # pad or truncate to the requested number of digits
@@ -197,7 +200,7 @@ sub stringify {
     my $self = shift;
 
     my $vstr = "$self->{v}";
-    my $scale = $self->{s};
+    my $scale = $self->{'s'};
 
     if ($scale > 0) {
        return substr($vstr,0,length($vstr)-$scale).".".substr($vstr,-$scale);

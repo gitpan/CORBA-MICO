@@ -248,12 +248,12 @@ longdouble_from_string (const char *str)
     if (*str == 'e' || (*str == 'E'))
       {
 	enegate = 0;
-	*str++;
+	str++;
 
 	if (*str == '-')
 	  {
 	    enegate = 1;
-	    *str++;
+	    str++;
 	  }
 	while (*str)
 	  {

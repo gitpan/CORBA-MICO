@@ -1,14 +1,12 @@
 #!/usr/bin/perl -w
 
-use CORBA::MICO ids => [ 'IDL:Account/Account:1.0' => undef,
-			 'IDL:Account/AcctCounter:1.0' => undef ];
-use CORBA::MICO::LongLong;
-
-#print "$$\n";
-#sleep 5;
+use CORBA::MICO ids => [ 'IDL:Account:1.0' => undef ];
 
 my %counters = ();
 my @servers;
+
+my $poa;
+my $current;
 
 package PlainCounter;
 
@@ -29,18 +27,41 @@ sub next {
 
 sub destroy {
     my $self = shift;
+    $poa->deactivate_object ($poa->servant_to_id ($self));
     delete $counters{$self};
 }
 
 package MyCounter;
 
-@MyCounter::ISA = qw(PlainCounter Account::AcctCounter);
+@MyCounter::ISA = qw(PlainCounter POA_Account::AcctCounter);
+
+package MyServantActivator;
+
+@MyServantActivator::ISA = qw(POA_PortableServer::ServantActivator);
+
+sub new {
+    bless {}, shift;
+}
+
+sub incarnate {
+    my ($self, $oid, $adapter) = @_;
+
+    print "created counter!\n";
+    
+    new MyCounter;
+}
+
+sub etherealize {
+    my ($self, $oid, $adapter, $servant, $cleanup_in_progress, $remaining_activations) = @_;
+
+    print "destroyed counter!\n";
+}
 
 package MyAccount;
 
-use Data::Dumper;
+@MyAccount::ISA = qw(POA_Account::Account);
 
-@MyAccount::ISA = qw(Account::Account);
+use Error qw(:try);
 
 sub new {
     my ($class) = @_;
@@ -104,10 +125,11 @@ sub deposit {
 
 sub withdraw {
     my ($self,$amount) = @_;
-    
+
     if ($amount > $self->{current_balance}) {
 	throw Account::Account::InsufficientFunds
 	    overdraft => $amount - $self->{current_balance};
+	
     } else {
 	$self->{current_balance} -= $amount;
     }
@@ -118,45 +140,12 @@ sub balance {
 };
 
 sub counter {
-    new MyCounter;
+    $poa->create_reference("IDL:Account/AcctCounter:1.0");
 }
 
 sub add {
     my ($self, $a, $b) = @_;
     $a+$b;
-}
-
-sub _save_object {
-    my $self = shift;
-
-    my $ifile = $self->_ident;
-    open (IDENT, ">$ifile") ||
-	die "Cannot open object save file '$ifile': $!";
-    print IDENT Dumper ($self);
-    close IDENT;
-}
-
-sub restore {
-    my ($class,$object) = @_;
-
-    my $ifile = $object->_ident;
-    open (IDENT, "<$ifile") ||
-	die "Cannot open object save file '$ifile': $!";
-    undef local $/;
-    my $self = eval scalar (<IDENT>);
-    close IDENT;
-
-    $self->_restore ($object);
-
-    push @servers, $self;
-
-    1;
-}
-
-sub server_exit {
-    my $self = shift;
-
-    $self->_boa->deactivate_impl (undef);
 }
 
 # Possible alternative mapping
@@ -187,24 +176,50 @@ sub _set_prefs {
 
 package main;
 
-my $restorer = new CORBA::BOAObjectRestorer;
-
-$restorer->add_restorers ('IDL:Account/Account:1.0' =>
-			      sub { MyAccount->restore(shift) });
+use Error qw(:try);
 
 $orb = CORBA::ORB_init("mico-local-orb");
-$boa = $orb->BOA_init("mico-local-boa");
+$root_poa = $orb->resolve_initial_references("RootPOA");
+$current = $orb->resolve_initial_references("POACurrent");
 
-$server = new MyAccount;
-$ref = $orb->object_to_string ($server);
+#  # Create a sub-poa with a servant manager
 
-push @servers, $server;
+$poa = $root_poa->create_POA ("MyPOA", undef,
+ 			      request_processing => 'USE_SERVANT_MANAGER',
+ 			      implicit_activation => 'IMPLICIT_ACTIVATION');
+
+$manager = new MyServantActivator;
+$poa->set_servant_manager ($poa->servant_to_reference ($manager));
+
+# Or, we could use a default servant
+
+#$poa = $root_poa->create_POA ("MyPOA", undef,
+#			      request_processing => 'USE_DEFAULT_SERVANT');
+#
+#$counter = new MyCounter;
+#$poa->set_servant ($counter);
+
+
+# Create the main server object
+
+$servant = new MyAccount;
+push @servers, $servant;
+
+#$id = $root_poa->activate_object ($servant);
+#$ref = $orb->object_to_string ($root_poa->id_to_reference ($id));
+$ref = $orb->object_to_string ($root_poa->servant_to_reference ($servant));
 
 open (OUT, ">account.ref");
 print OUT "$ref";
 close OUT;
 
-$boa->impl_is_ready ( undef );
+# Activate our POA's
+
+$root_poa->_get_the_POAManager->activate;
+$poa->_get_the_POAManager->activate;
+
+print "The daily maximum is: ", Account::DAILY_MAX, "\n";
+
 $orb->run ();
 
-exit (0);
+exit (0);			# Never reached

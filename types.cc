@@ -3,53 +3,23 @@
 #include "pmico.h"
 #include "exttypes.h"
 
-// A table connecting CORBA::Object_ptr's to the surrogate or real
+// A table connecting CORBA::Object_ptr's to the surrogate 
 // Perl object. We store the objects here as IV's, not as SV's,
 // since we don't hold a reference on the object, and need to
 // remove them from here when reference count has dropped to zero
 static HV *pin_table = 0;
 
-static const U32 instvars_magic = 0x18981972;
-
-// Magic (adopted from DBI) to attach InstVars invisibly to perlobj
-PMicoInstVars *
-pmico_instvars_add (SV *perlobj) 
-{
-    SV *iv_sv = newSV (sizeof(PMicoInstVars));
-    PMicoInstVars *iv = (PMicoInstVars *)SvPVX(iv_sv);
-
-    SV *rv = newRV(iv_sv);	// just needed for sv_bless
-    sv_bless (rv, gv_stashpv("CORBA::MICO::InstVars", TRUE));
-    sv_free (rv);
-
-    iv->magic = instvars_magic;
-    iv->obj = NULL;
-    iv->trueobj = NULL;
-    iv->repoid = NULL;
-
-    if (SvROK(perlobj))
-	perlobj = SvRV(perlobj);
-    
-    sv_magic (perlobj, iv_sv, '~' , Nullch, 0);
-    SvREFCNT_dec (iv_sv);	// sv_magic() incremented it
-    // It looks from sv.c like this is now unecessary, but DBI does it
-    // and it shouldn't do any harm
-    SvRMAGICAL_on (perlobj);
-
-    return iv;
-}
-
 // Find or create a Perl object for this CORBA object.
 // Takes over ownership of obj
 SV *
-pmico_find_or_create (CORBA::Object *obj)
+pmico_objref_to_sv (CORBA::Object *obj)
 {
     if (CORBA::is_nil (obj))
 	// FIXME: memory leaks?
 	return newSVsv(&sv_undef);
-    
+
     char buf[24];
-    sprintf(buf, "%d", (IV)obj);
+    sprintf(buf, "%ld", (IV)obj);
 
     if (!pin_table)
 	pin_table = newHV();
@@ -61,174 +31,49 @@ pmico_find_or_create (CORBA::Object *obj)
 	}
     }
 
-    // We make surrogate objects hash refs - it might come in handy...
-    SV *result = newRV_noinc((SV *)newHV());
+    SV *result = newRV_noinc(newSViv((IV)obj));
 
     PMicoIfaceInfo *info = pmico_find_interface_description (obj->_repoid());
     if (info)
-	sv_bless (result, gv_stashpv((char *)info->pkg.c_str(), TRUE));
+	sv_bless (result, gv_stashpv((char *)info->pkg.c_str(), true));
     else
-	sv_bless (result, gv_stashpv("CORBA::Object", TRUE));
-
-    PMicoInstVars *iv = pmico_instvars_add (result);
-
-    iv->obj = obj;
-    iv->trueobj = NULL;
+	sv_bless (result, gv_stashpv("CORBA::Object", true));
 
     hv_store (pin_table, buf, strlen(buf), newSViv((IV)SvRV(result)), 0);
 
     return result;
 }
 
-PMicoInstVars *
-pmico_instvars_get (SV *perlobj) 
+// Removes an object from the pin table
+void
+pmico_objref_destroy (CORBA::Object *obj)
 {
-    PMicoInstVars *iv = NULL;
-    
-    if (SvROK(perlobj))
-	perlobj = SvRV(perlobj);
-
-    if (SvMAGICAL (perlobj)) {
-        MAGIC *mg = mg_find (perlobj, '~');
-    
-        if (mg)
-	    iv = (PMicoInstVars *)SvPVX(mg->mg_obj);
-    }
-
-    if (iv && (iv->magic == instvars_magic))
-	return iv;
-    else
-	return NULL;
-}
-
-const char *
-pmico_get_repoid (SV *perlobj, PMicoInstVars *iv)
-{
-    if (iv->repoid == NULL) {
-	dSP;
-	PUSHMARK(sp);
-	XPUSHs(perlobj);
-	PUTBACK;
-	
-	int count = perl_call_method("_pmico_repoid", G_SCALAR);
-	SPAGAIN;
-	
-	if (count != 1)			/* sanity check */
-	    croak("object->_pmico_repoid didn't return 1 argument");
-	
-	iv->repoid = new string (POPp);
-	
-	PUTBACK;
-    }
-
-    return iv->repoid->c_str();
-}
-
-PMicoInstVars *
-pmico_init_obj (SV *perlobj, 
-		CORBA::Object *o, 
-		CORBA::BOA::ReferenceData *refdata,
-		CORBA::InterfaceDef *iface, 
-		CORBA::ImplementationDef *impl,
-		const char *repoid) 
-{
-    PMicoInstVars *iv = pmico_instvars_get (perlobj);
-    CORBA::ImplementationDef_var implementation = CORBA::ImplementationDef::_duplicate(impl);
-
-    if (!iv) {
-	iv = pmico_instvars_add (perlobj);
-    }
-
-    if (!iv->obj) {
-	if (!repoid)
-	    repoid = pmico_get_repoid (perlobj, iv);
-	
-	PMicoIfaceInfo *info = pmico_find_interface_description (repoid);
-	if (!info)
-	    info = pmico_load_interface (NULL, NULL, repoid);
-
-	iv->trueobj = new PMicoTrueObject(perlobj, repoid);
-	iv->obj = iv->trueobj;
-
-	CORBA::BOA::ReferenceData *rd;
-	if (refdata)
-	    rd = refdata;
-	else
-	    rd = new CORBA::BOA::ReferenceData;
-
-	if (!implementation)
-	    implementation = iv->trueobj->_find_impl (iv->repoid->c_str(), info->desc->name);
-
-	assert ( !CORBA::is_nil (implementation) );
-
-	if (!iface)
-	    iface = info->iface;
-	
-	if (o)
-	    iv->trueobj->_restore_ref (o, *rd, iface, implementation);
-	else
-	    iv->trueobj->_create_ref (*rd, iface, implementation, repoid);
-
-	if (rd != refdata)
-	    delete rd;
-    }
-
-    if (!pin_table)
-	pin_table = newHV();
-
     char buf[24];
-    sprintf(buf, "%d", (IV)iv->obj);
-
-    hv_store (pin_table, buf, strlen(buf), newSViv((IV)SvRV(perlobj)), 0);
-
-    return iv;
+    sprintf(buf, "%ld", (IV)obj);
+    
+    hv_delete (pin_table, buf, strlen(buf), G_DISCARD);
 }
 
 CORBA::Object_ptr
-pmico_sv_to_obj (SV *perlobj)
+pmico_sv_to_objref (SV *perlobj)
 {
     if (!SvOK(perlobj))
 	return CORBA::Object::_nil();
 
-    PMicoInstVars *iv = pmico_instvars_get (perlobj);
-    
-    if (!iv && !sv_derived_from (perlobj, "CORBA::Object"))
+    if (!sv_derived_from (perlobj, "CORBA::Object"))
 	croak ("Argument is not a CORBA::Object");
 
-    if (!iv || !iv->obj)
-	iv = pmico_init_obj (perlobj, NULL, NULL, NULL, NULL, NULL);
-    
-    return iv->obj;
+    return (CORBA::Object_ptr)SvIV((SV*)SvRV(perlobj));
 }
-
-void
-pmico_instvars_destroy (PMicoInstVars *instvars)
-{
-    char buf[24];
-    assert (instvars->magic == instvars_magic);
-
-    sprintf(buf, "%d", (IV)instvars->obj);
-
-    if (pin_table)
-	hv_delete(pin_table, buf, strlen(buf), G_DISCARD);
-
-    if (instvars->obj) {
-	if (instvars->trueobj)
-	    instvars->trueobj->servant_destroyed();
-
-	CORBA::release(instvars->obj);
-    }
-
-    if (instvars->repoid)
-	delete instvars->repoid;
-
-    // We don't free instvars itself here, because we have stuck
-    // it inside an SV *
-}
-
 
 // The rest of this file implements mapping Perl data structures
 // to and from MICO's Anys.
+
+// We insert into using the <<= operators, which are standard
+// but don't give us failure feedback. We could also use
+// MICO's any.insert() which have a Boolean return value. However,
+// we already do most or all of the checking that MICO
+// will be doing anyways.
 
 static bool sv_to_any   (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv);
 static SV * sv_from_any (CORBA::Any *any, CORBA::TypeCode *tc);
@@ -240,10 +85,11 @@ short_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::Short)v != v) {
 	warn ("CORBA::Short out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::Short)v);
+    *res <<= (CORBA::Short)v;
+    return true;
 }
 
 static bool
@@ -253,10 +99,11 @@ long_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::Long)v != v) {
 	warn ("CORBA::Long out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::Long)v);
+    *res <<= (CORBA::Long)v;
+    return true;
 }
 
 static bool
@@ -266,10 +113,11 @@ ushort_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::UShort)v != v) {
 	warn ("CORBA::UShort out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::UShort)v);
+    *res <<= (CORBA::UShort)v;
+    return true;
 }
 
 static bool
@@ -279,10 +127,11 @@ ulong_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::ULong)v != v) {
 	warn ("CORBA::ULong out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::ULong)v);
+    *res <<= (CORBA::ULong)v;
+    return true;
 }
 
 static bool
@@ -292,10 +141,11 @@ float_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::Float)v != v) {
 	warn ("CORBA::Float out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::Float)v);
+    *res <<= (CORBA::Float)v;
+    return true;
 }
 
 static bool
@@ -305,10 +155,11 @@ double_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::Double)v != v) {
 	warn ("CORBA::Double out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= (CORBA::Double)v);
+    *res <<= (CORBA::Double)v;
+    return true;
 }
 
 static bool 
@@ -321,18 +172,20 @@ char_to_any (CORBA::Any *res, SV *sv)
 
     if (len < 1) {
 	warn("Character must have length >= 1");
-	return FALSE;
+	return false;
     }
 
-    // XXX Is null character OK?
+    // FIXME: Is null character OK?
     
-    return (*res <<= CORBA::Any::from_char(str[0]));
+    *res <<= CORBA::Any::from_char(str[0]);
+    return true;
 }
 
 static bool
 boolean_to_any (CORBA::Any *res, SV *sv)
 {
-    return (*res <<= CORBA::Any::from_boolean(SvTRUE(sv)));
+    *res <<= CORBA::Any::from_boolean(SvTRUE(sv));
+    return true;
 }
 
 static bool
@@ -342,10 +195,11 @@ octet_to_any (CORBA::Any *res, SV *sv)
 
     if ((CORBA::Octet)v != v) {
 	warn ("CORBA::Octet out of range");
-	return FALSE;
+	return false;
     }
     
-    return (*res <<= CORBA::Any::from_octet(v));
+    *res <<= CORBA::Any::from_octet(v);
+    return true;
 }
 
 static bool
@@ -355,7 +209,7 @@ enum_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 
     if (ind < 0) {
 	warn ("Invalid enumeration value '%s'", SvPV(sv,na));
-	return FALSE;
+	return false;
     }
 
     return (res->enum_put ((CORBA::ULong)ind));
@@ -366,7 +220,7 @@ struct_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV)) {
 	warn ("Structure must be hash reference");
-	return FALSE;
+	return false;
     }
 
     HV *hv = (HV *)SvRV(sv);
@@ -377,12 +231,12 @@ struct_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	SV **valp = hv_fetch (hv, (char *)name, strlen(name), 0);
 	if (!valp) {
 	    warn ("Missing structure member '%s'", name);
-	    return FALSE;
+	    return false;
 	}
 	
 	CORBA::TypeCode_var t = tc->member_type(i);
 	if (!sv_to_any (res, t, *valp))
-	    return FALSE;
+	    return false;
     }
     return (res->struct_put_end());
 }
@@ -400,33 +254,33 @@ sequence_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     } else {
 	if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVAV)) {
 	    warn("Sequence must be array reference");
-	    return FALSE;
+	    return false;
 	}
 	len = 1+av_len((AV *)SvRV(sv));
     }
 
     if (tc->length() != 0 && len > tc->length()) {
 	warn("Sequence length (%d) exceeds bound (%d)", len, tc->length());
-	return FALSE;
+	return false;
     }
 
-    if (!res->seq_put_begin(len)) return FALSE;
+    if (!res->seq_put_begin(len)) return false;
 
     if (content_tc->kind() == CORBA::tk_octet) {
 	CORBA::Octet *buf = (CORBA::Octet *)SvPV(sv,na);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
-	    if (!(*res <<= CORBA::Any::from_octet(buf[i]))) return FALSE;
+	    *res <<= CORBA::Any::from_octet(buf[i]);
     }
     else if (content_tc->kind() == CORBA::tk_char) {
 	CORBA::Char *buf = (CORBA::Char *)SvPV(sv,na);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
-	    if (!(*res <<= CORBA::Any::from_char(buf[i]))) return FALSE;
+	    *res <<= CORBA::Any::from_char(buf[i]);
     }
     else {
 	AV *av = (AV *)SvRV(sv);
 	for (CORBA::ULong i = 0 ; i < len ; i++)
 	    if (!sv_to_any (res, content_tc, *av_fetch(av, i, 0))) 
-		return FALSE;
+		return false;
     }
 
     return res->seq_put_end();
@@ -440,21 +294,21 @@ array_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 
     if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVAV)) {
 	warn("Array argument must be array reference");
-	return FALSE;
+	return false;
     }
 
     AV *av = (AV *)SvRV(sv);
 
-    if (av_len(av)+1 != len) {
+    if (av_len(av)+1 != (I32)len) {
 	warn("Array argument should be of length %d, is %d", len, av_len(av)+1);
-	return FALSE;
+	return false;
     }
 	
-    if (!res->array_put_begin()) return FALSE;
+    if (!res->array_put_begin()) return false;
 
     for (CORBA::ULong i = 0 ; i < len ; i++)
 	if (!sv_to_any (res, content_tc, *av_fetch(av, i, 0))) 
-	    return FALSE;
+	    return false;
 
     return res->array_put_end();
 }
@@ -462,16 +316,13 @@ array_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 static bool
 except_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    SV **svp;
-    const char *id = tc->id();
-
     if (!res->except_put_begin(tc->id()))
-	return FALSE;
+	return false;
 
     if (tc->member_count() != 0) {
 	if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV)) {
 	    warn ("Exception must be hash reference");
-	    return FALSE;
+	    return false;
 	}
 	
 	HV *hv = (HV *)SvRV(sv);
@@ -481,12 +332,12 @@ except_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	    SV **valp = hv_fetch (hv, (char *)name, strlen(name), 0);
 	    if (!valp) {
 		warn ("Missing exception member '%s'", name);
-		return FALSE;
+		return false;
 	    }
 
 	    CORBA::TypeCode_var t = tc->member_type(i);
 	    if (!sv_to_any (res, t, *valp))
-		return FALSE;
+		return false;
 	}
     }
 
@@ -498,20 +349,20 @@ objref_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     // FIXME: check inheritance
 
-    if (!SvOK(sv))
-	return (*res <<= CORBA::Any::from_object (CORBA::Object::_nil(), tc->name()));
+    if (!SvOK(sv)) {
+	*res <<= CORBA::Any::from_object (CORBA::Object::_nil(), tc->name());
+	return true;
+    }
+    
 
-    PMicoInstVars *iv = pmico_instvars_get (sv);
-
-    if (!iv && !sv_derived_from (sv, "CORBA::Object")) {
+    if (!sv_derived_from (sv, "CORBA::Object")) {
         warn ("Value is not a CORBA::Object");
-	return FALSE;
+	return false;
     }
 
-    if (!iv || !iv->obj)
-	iv = pmico_init_obj (sv, NULL, NULL, NULL, NULL, NULL);
-
-    return (*res <<= CORBA::Any::from_object (iv->obj, tc->name()));
+    *res <<= CORBA::Any::from_object ((CORBA::Object_ptr)SvIV((SV*)SvRV(sv)),
+				      tc->name());
+    return true;
 }
 
 static CORBA::Long
@@ -526,7 +377,7 @@ union_find_arm (CORBA::TypeCode_ptr tc, SV *discriminator)
     CORBA::Long i = 0;
     bool found = false;
 
-    for (i = 0; i<tc->member_count(); i++) {
+    for (i = 0; ((CORBA::ULong)i)<tc->member_count(); i++) {
 	if (i != defidx) {
 	    CORBA::Any_var labelany = tc->member_label(i);
 	    SV *label = sv_from_any (labelany, dtype);
@@ -567,13 +418,13 @@ static bool
 union_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     if (!res->union_put_begin())
-	return FALSE;
+	return false;
 
     if (!SvROK(sv) || 
 	(SvTYPE(SvRV(sv)) != SVt_PVAV) ||
 	(av_len((AV *)SvRV(sv)) != 1)) {
 	warn("Union must be array reference of length 2");
-	return FALSE;
+	return false;
     }
 
     AV *av = (AV *)SvRV(sv);
@@ -582,21 +433,21 @@ union_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     CORBA::TypeCode_var dtype = tc->discriminator_type();
 
     if (!sv_to_any (res, dtype, discriminator))
-	return FALSE;
+	return false;
 
     CORBA::Long i = union_find_arm (tc, discriminator);
 
     if (i >= 0) {
 	if (!res->union_put_selection(i))
-	    return FALSE;
+	    return false;
 
 	CORBA::TypeCode_var t = tc->member_type(i);
 	if (!sv_to_any (res, t, *av_fetch(av, 1, 0)))
-	    return FALSE;
+	    return false;
     }
     
     if (!res->union_put_end())
-	return FALSE;
+	return false;
 
     return newRV_noinc((SV *)av);
 }
@@ -606,12 +457,13 @@ any_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     if (!sv_isa(sv, "CORBA::Any")) {
 	warn ("any isn't a CORBA::Any");
-	return FALSE;
+	return false;
     }
 
     CORBA::Any *any = (CORBA::Any *)SvIV(SvRV(sv));
 
-    return (*res <<= *any);
+    *res <<= *any;
+    return true;
 }
 
 static bool
@@ -624,32 +476,39 @@ alias_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 static bool
 string_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    return (*res <<= CORBA::Any::from_string(SvPV(sv, na), tc->length(), FALSE));
+    *res <<= CORBA::Any::from_string(SvPV(sv, na), tc->length(), false);
+    return true;
 }
 
 static bool
 longlong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    return (*res <<= SvLLV (sv));
+   *res <<= SvLLV (sv);
+   return true;
 }
 
 static bool
 ulonglong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    return (*res <<= SvULLV (sv));
+    *res <<= SvULLV (sv);
+    return true;
 }
 
 static bool
 longdouble_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    return (*res <<= SvLDV (sv));
+    *res <<= SvLDV (sv);
+    return true;
 }
 
 static bool
 fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
     int digits = tc->fixed_digits();
-    FixedBase::FixedValue val (digits+1);
+    int scale = tc->fixed_scale();
+    FixedBase fixed(digits, scale);
+    FixedBase::FixedValue val(digits + 1);
+
     int count;
     STRLEN len;
     char *str;
@@ -675,7 +534,7 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	     (void)POPs;
 
 	   PUTBACK;
-	   return FALSE;
+	   return false;
 	}
 
 	sv = POPs;
@@ -699,24 +558,45 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	(void)POPs;
 
       PUTBACK;
-      return FALSE;
+      return false;
     }
     
     sv = POPs;
 
     str = SvPV(sv,len);
 
-    if (len != digits + 1) {
+    if (len != (STRLEN)(digits + 1)) {
       warn ("CORBA::Fixed::to_digits return wrong number of digits!\n");
-      return FALSE;
+      return false;
     }
+
+    // FIXME: going through Fixed as opposed to FixedBase
+    //        (as we used to do, before MICO changed) loses,
+    //        since MICO just stores in integral types
 
     val.length (digits+1);
     val[digits] = (str[0] == '-');
     for (int i = 0 ; i < digits ; i++)
       val[i] = str[i+1] - '0';
+
+    fixed.from_digits (val);
     
-    return (*res <<= CORBA::Any::from_fixed (val, digits, tc->fixed_scale()));
+    *res <<= CORBA::Any::from_fixed (fixed, digits, scale);
+    return true;
+}
+
+static bool
+typecode_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
+{
+    if (!sv_isa(sv, "CORBA::TypeCode")) {
+	warn ("any isn't a CORBA::TypeCode");
+	return false;
+    }
+
+    CORBA::TypeCode *typecode = (CORBA::TypeCode *)SvIV(SvRV(sv));
+
+    *res <<= typecode;
+    return true;
 }
 
 static bool 
@@ -725,7 +605,7 @@ sv_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     switch (tc->kind()) {
     case CORBA::tk_null:
     case CORBA::tk_void:
-        return TRUE;
+        return true;
     case CORBA::tk_short:
 	return short_to_any (res, sv);
     case CORBA::tk_long:
@@ -772,13 +652,14 @@ sv_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	return longdouble_to_any (res, tc, sv);
     case CORBA::tk_fixed:
 	return fixed_to_any (res, tc, sv);
+    case CORBA::tk_TypeCode:
+	return typecode_to_any (res, tc, sv);
     case CORBA::tk_wchar:
     case CORBA::tk_wstring:
-    case CORBA::tk_TypeCode:
     case CORBA::tk_Principal:
-    case CORBA::tk_recursive:
+    default:
 	warn ("Unsupported output typecode %d\n", tc->kind());
-	return FALSE;
+	return false;
     }
 }
 
@@ -988,11 +869,10 @@ static SV *
 except_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     char *repoid;
-    SV *result;
     AV *av = NULL;
 
     if (!any->except_get_begin (repoid))
-	return FALSE;
+	return NULL;
 
     // FIXME: Should we check the unmarshalled type against the static type?
 
@@ -1025,9 +905,12 @@ static SV *
 objref_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     CORBA::Object_ptr obj;
-    *any >>= CORBA::Any::to_object (obj);
 
-    return pmico_find_or_create (obj);
+    if (!(*any >>= CORBA::Any::to_object (obj)))
+	return NULL;
+
+    obj = CORBA::Object::_duplicate (obj);
+    return pmico_objref_to_sv (obj);
 }
 
 static SV *
@@ -1073,6 +956,7 @@ union_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     return NULL;
 }
 
+// FIXME: we use CORBA::Any::operator>>=(Any &a) which isn't OMG standard?
 static SV *
 any_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
@@ -1096,10 +980,8 @@ string_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     char *result;
     SV *sv = NULL;
 
-    if (*any >>= CORBA::Any::to_string (result, tc->length())) {
+    if (*any >>= CORBA::Any::to_string (result, tc->length()))
 	sv = newSVpv (result, 0);
-	CORBA::string_free (result);
-    }
     
     return sv;
 }
@@ -1110,9 +992,8 @@ longlong_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     SV *sv = NULL;
     CORBA::LongLong result;
 
-    if (*any >>= result) {
+    if (*any >>= result)
 	sv = ll_from_longlong (result);
-    }
     
     return sv;
 }
@@ -1123,9 +1004,8 @@ ulonglong_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     SV *sv = NULL;
     CORBA::ULongLong result;
 
-    if (*any >>= result) {
+    if (*any >>= result)
 	sv = ull_from_ulonglong (result);
-    }
     
     return sv;
 }
@@ -1136,9 +1016,8 @@ longdouble_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     SV *sv = NULL;
     CORBA::LongDouble result;
 
-    if (*any >>= result) {
+    if (*any >>= result)
 	sv = ld_from_longdouble (result);
-    }
     
     return sv;
 }
@@ -1149,10 +1028,16 @@ fixed_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     FixedBase::FixedValue_var v;
     CORBA::UShort digits = tc->fixed_digits();
     CORBA::Short scale = tc->fixed_scale();
+    FixedBase fixed (digits, scale);
 
     SV *sv = NULL;
 
-    if (*any >>= CORBA::Any::to_fixed (v, digits, scale)) {
+    // FIXME: going through Fixed as opposed to FixedBase
+    //        (as we used to do, before MICO changed) loses,
+    //         since MICO just stores in integral types
+    if (*any >>= CORBA::Any::to_fixed (fixed, digits, scale)) {
+
+	v = fixed.to_digits();
 
 	int i;
 	SV *tsv = newSV(digits+1);
@@ -1188,6 +1073,17 @@ fixed_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     }
     
     return sv;
+}
+
+static SV *
+typecode_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
+{
+    CORBA::TypeCode_ptr r;
+    *any >>= r;
+    r = CORBA::TypeCode::_duplicate (r);
+
+    SV *res = newSV(0);
+    return sv_setref_pv (res, "CORBA::TypeCode", (void *)r);
 }
 
 static SV *
@@ -1244,11 +1140,16 @@ sv_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 	return longdouble_from_any (any, tc);
     case CORBA::tk_fixed:
 	return fixed_from_any (any, tc);
+    case CORBA::tk_TypeCode:
+	return typecode_from_any (any, tc);
     case CORBA::tk_wchar:
     case CORBA::tk_wstring:
-    case CORBA::tk_TypeCode:
     case CORBA::tk_Principal:
-    case CORBA::tk_recursive:
+    case CORBA::tk_value:
+    case CORBA::tk_value_box:
+    case CORBA::tk_native:
+    case CORBA::tk_abstract_interface:
+    default:
 	return NULL;
     }
 }

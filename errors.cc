@@ -104,6 +104,84 @@ static SystemExceptionRec system_exceptions[] = {
 static const int num_system_exceptions =
    sizeof(system_exceptions)/sizeof(SystemExceptionRec);
 
+/* The following enumeration would be useful if MICO's
+ * exception handling was standard...
+ */
+typedef enum {
+    PMICO_ADAPTER_ALREADY_EXISTS = 1 << 0,
+    PMICO_ADAPTER_INACTIVE       = 1 << 1,
+    PMICO_ADAPTER_NON_EXISTANT   = 1 << 2,
+    PMICO_INVALID_POLICY         = 1 << 3,
+    PMICO_NO_SERVANT             = 1 << 4,
+    PMICO_OBJECT_ALREADY_ACTIVE  = 1 << 5,
+    PMICO_OBJECT_NOT_ACTIVE      = 1 << 6,
+    PMICO_SERVANT_ALREADY_ACTIVE = 1 << 7,
+    PMICO_SERVANT_NOT_ACTIVE     = 1 << 8,
+    PMICO_WRONG_ADAPTER          = 1 << 9,
+    PMICO_WRONG_POLICY           = 1 << 10,
+    PMICO_MGR_ADAPTER_INACTIVE   = 1 << 11,
+    PMICO_NO_CONTEXT             = 1 << 12,
+    PMICO_TYPECODE_BOUNDS        = 1 << 13,
+    PMICO_TYPECODE_BAD_KIND      = 1 << 14
+} PMicoBuiltinException;
+
+struct BuiltinExceptionRec {
+    char *repoid;
+    char *package;
+    PMicoBuiltinException value;
+};
+
+static BuiltinExceptionRec builtin_exceptions[] = {
+    { "IDL:omg.org/PortableServer/POA/AdapterAlreadyExists:1.0",
+      "PortableServer::POA::AdapterAlreadyExists",
+      PMICO_ADAPTER_ALREADY_EXISTS },
+    { "IDL:omg.org/PortableServer/POA/AdapterInactive:1.0",
+      "PortableServer::POA::AdapterInactive",
+      PMICO_ADAPTER_INACTIVE },
+    { "IDL:omg.org/PortableServer/POA/AdapterNonExistant:1.0",
+      "PortableServer::POA::AdapterNonExistant",
+      PMICO_ADAPTER_NON_EXISTANT },
+    { "IDL:omg.org/PortableServer/POA/InvalidPolicy:1.0",
+      "PortableServer::POA::InvalidPolicy",
+      PMICO_INVALID_POLICY },
+    { "IDL:omg.org/PortableServer/POA/NoServant:1.0",
+      "PortableServer::POA::NoServant",
+      PMICO_NO_SERVANT },
+    { "IDL:omg.org/PortableServer/POA/ObjectAlreadyActive:1.0",
+      "PortableServer::POA::ObjectAlreadyActive",
+      PMICO_OBJECT_ALREADY_ACTIVE },
+    { "IDL:omg.org/PortableServer/POA/ObjectNotActive:1.0",
+      "PortableServer::POA::ObjectNotActive",
+      PMICO_OBJECT_NOT_ACTIVE },
+    { "IDL:omg.org/PortableServer/POA/ServantAlreadyActive:1.0",
+      "PortableServer::POA::ServantAlreadyActive",
+      PMICO_SERVANT_ALREADY_ACTIVE },
+    { "IDL:omg.org/PortableServer/POA/ServantNotActive:1.0",
+      "PortableServer::POA::ServantNotActive",
+      PMICO_SERVANT_NOT_ACTIVE },
+    { "IDL:omg.org/PortableServer/POA/WrongAdapter:1.0",
+      "PortableServer::POA::WrongAdapter",
+      PMICO_WRONG_ADAPTER },
+    { "IDL:omg.org/PortableServer/POA/WrongPolicy:1.0",
+      "PortableServer::POA::WrongPolicy",
+      PMICO_WRONG_POLICY },
+    { "IDL:omg.org/PortableServer/POAManager/AdapterInactive:1.0",
+      "PortableServer::POAManager::AdapterInactive",
+      PMICO_MGR_ADAPTER_INACTIVE },
+    { "IDL:omg.org/PortableServer/Current/NoContext:1.0",
+      "PortableServer::Current::NoContext",
+      PMICO_NO_CONTEXT },
+    { "IDL:omg.org/CORBA/TypeCode/Bounds:1.0",
+      "CORBA::TypeCode::Bounds",
+      PMICO_TYPECODE_BOUNDS },
+    { "IDL:omg.org/CORBA/TypeCode/BadKind:1.0",
+      "CORBA::TypeCode::BadKind",
+      PMICO_TYPECODE_BAD_KIND },
+};
+
+static const int num_builtin_exceptions =
+   sizeof(builtin_exceptions)/sizeof(BuiltinExceptionRec);
+
 static HV *exceptions_hv;
 
 // Takes ownership of exception object
@@ -177,6 +255,11 @@ pmico_init_exceptions (void)
 	pmico_setup_exception (system_exceptions[i].repoid,
 			       system_exceptions[i].package,
 			       "CORBA::SystemException");
+    }
+    for (int i=1; i<num_builtin_exceptions; i++) {
+	pmico_setup_exception (builtin_exceptions[i].repoid,
+			       builtin_exceptions[i].package,
+			       "CORBA::UserException");
     }
     pmico_setup_exception ("IDL:omg.org/CORBA/SystemException:1.0",
 			     "CORBA::SystemException",
@@ -289,4 +372,30 @@ pmico_user_except (const char *repoid, SV *value)
     PUTBACK;
     
     return newSVsv(sv);
+}
+
+SV *
+pmico_builtin_except (CORBA::Exception *ex)
+{
+    const char *repoid = ex->_repoid();
+
+    /* Special case InvalidPolicy because it takes a parameter */
+    PortableServer::POA::InvalidPolicy *ipex =
+	PortableServer::POA::InvalidPolicy::_downcast (ex);
+
+    if (ipex) {
+	AV *av = newAV();
+	av_push(av, newSVpv("index", 0));
+	av_push(av, newSViv(ipex->index));
+	
+	return pmico_user_except (repoid, (SV *)av);
+    }
+
+    CORBA::SystemException *sysex = CORBA::SystemException::_downcast(ex);
+    if (sysex)
+	return pmico_system_except ( sysex->_repoid(), 
+				     sysex->minor(), 
+				     sysex->completed() );
+    
+    return pmico_user_except (repoid, (SV *)newAV());
 }

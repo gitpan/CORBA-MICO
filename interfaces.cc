@@ -42,11 +42,14 @@ store_interface_description (CORBA::InterfaceDef *iface)
     }
 
     if (iface) {
-	char *pkg = iface->absolute_name();
+	CORBA::String_var pkg = iface->absolute_name();
+	const char *pkgname;
 	if (!strncmp(pkg, "::", 2))
-	    pkg += 2;
+	    pkgname = pkg + 2;
+	else
+	    pkgname = pkg;
  
-	PMicoIfaceInfo *info = new PMicoIfaceInfo (pkg, 
+	PMicoIfaceInfo *info = new PMicoIfaceInfo (pkgname, 
 						   CORBA::InterfaceDef::_duplicate(iface),
 						   desc);
 	hv_store (hv, (char *)repoid, len, newSViv((IV)info), 0);
@@ -65,15 +68,16 @@ static void
 decode_exception (CORBA::Exception *ex,
 		  CORBA::OperationDescription *opr)
 {
-    CORBA::UnknownUserException *uuex = CORBA::UnknownUserException::_narrow(ex);
+    CORBA::UnknownUserException *uuex = CORBA::UnknownUserException::_downcast(ex);
+
     if (uuex) {
 	// A user exception, check against the possible exceptions for
 	// this call.
 	if (opr)
-	    for (int i = 0 ; i<opr->exceptions.length() ; i++) {
+	    for (unsigned int i = 0 ; i<opr->exceptions.length() ; i++) {
 		if (!strcmp(opr->exceptions[i].id, uuex->_except_repoid())) {
 
-		    SV *e = pmico_from_any (&uuex->exception ( opr->exceptions[i].type ));
+	    SV *e = pmico_from_any (&uuex->exception ( opr->exceptions[i].type ));
 		    pmico_throw ( e );
 		}
 	    }
@@ -81,7 +85,7 @@ decode_exception (CORBA::Exception *ex,
 					   0, CORBA::COMPLETED_MAYBE ) );
 
     } else {
-	CORBA::SystemException *sysex = CORBA::SystemException::_narrow(ex);
+	CORBA::SystemException *sysex = CORBA::SystemException::_downcast(ex);
 	if (sysex) {
 	    pmico_throw (pmico_system_except ( sysex->_repoid(), 
 					       sysex->minor(), 
@@ -99,7 +103,7 @@ XS(_pmico_callStub)
     SV **repoidp;
     char *repoid;
     string name;
-    int i,j;
+    CORBA::ULong i,j;
 
     I32 index = XSANY.any_i32;
     
@@ -126,26 +130,22 @@ XS(_pmico_callStub)
 
     // Get the discriminator 
 
-    PMicoInstVars *iv;
-    if (items < 1 || !(iv = pmico_instvars_get(ST(0))))
+    CORBA::Object_ptr obj;
+    if (items < 1)
 	croak("%s::%s must have object as first argument",
 	      HvNAME(CvSTASH(cv)), name.c_str ());
 
-    if (iv->trueobj) {
-	warn ("Unimplemented method called");
-	pmico_throw (pmico_system_except ( "IDL:omg.org/CORBA/NO_IMPLEMENT",
-					   0, CORBA::COMPLETED_NO ));
-    }
+    obj = pmico_sv_to_objref(ST(0)); // may croak
 
     // Form the request
 
-    CORBA::Request_var req = iv->obj->_request ( name.c_str() );
+    CORBA::Request_var req = obj->_request ( name.c_str() );
 
     if (index >= OPERATION_BASE && index < GETTER_BASE) {
         CORBA::OperationDescription *opr = &desc->operations[index-OPERATION_BASE];
 	j = 1;
 	for (i = 0 ; i<opr->parameters.length() ; i++) {
-	    SV *arg = (j<items) ? ST(j) : &sv_undef;
+	    SV *arg = (j<(CORBA::ULong)items) ? ST(j) : &sv_undef;
 	    CORBA::Any *argany;
 
 	    switch (opr->parameters[i].mode) {
@@ -208,7 +208,7 @@ XS(_pmico_callStub)
 
     // Get return and inout, and inout parameters
 
-    U32 return_count = 0;
+    I32 return_count = 0;
     
     if (req->result()->value()->type()->kind() != CORBA::tk_void) {
 	// FIXME, do the right thing in array and scalar contexts
@@ -294,43 +294,22 @@ static void
 ensure_iface_repository (CORBA::ORB_ptr _orb)
 {
     if (iface_repository == NULL) {
-	CORBA::ORB_ptr orb = CORBA::ORB::_duplicate(_orb);
+	CORBA::ORB_var orb = CORBA::ORB::_duplicate(_orb);
 	if (CORBA::is_nil(orb))
 	    orb = CORBA::ORB_instance ("mico-local-orb", TRUE);
 	
 	CORBA::Object_var obj = 
 	    orb->resolve_initial_references("InterfaceRepository");
 	iface_repository = CORBA::Repository::_narrow(obj);
-	
-	CORBA::release(orb);
-
-	if (iface_repository == NULL)
-	    croak("Cannot contact interface repository");
     }
+    
+    if (iface_repository == NULL)
+	croak("Cannot contact interface repository");
 }
 
-PMicoIfaceInfo *
-pmico_load_interface (CORBA::InterfaceDef *_iface, CORBA::ORB_ptr _orb,
-		      const char *_id)
+static PMicoIfaceInfo *
+pmico_init_interface (CORBA::InterfaceDef *iface, const char *id)
 {
-    assert (_iface != NULL || _id != NULL);
-
-    CORBA::InterfaceDef *iface = _iface;
-    const char *id = _id;
-    
-    if (iface == NULL) {
-	ensure_iface_repository (_orb);
-	
-	CORBA::Contained_var o = iface_repository->lookup_id((char *)id);
-	iface = CORBA::InterfaceDef::_narrow (o);
-	
-	if (iface == NULL)
-	    croak("Cannot find '%s' in interface repository", id);
-    }
-
-    if (!iface_repository)
-	iface_repository = iface->containing_repository();
-
     // Save the interface description for later reference
     PMicoIfaceInfo *info = store_interface_description (iface);
 
@@ -339,23 +318,16 @@ pmico_load_interface (CORBA::InterfaceDef *_iface, CORBA::ORB_ptr _orb,
     if (!id)
 	id = desc->id;
 
-    // Create a package method that will allow us to determine the
-    // repository id before we have the MICO object set up
-
-    string fullname = string (info->pkg) + "::_pmico_repoid";
-    CV *method_cv = newXS ((char *)fullname.c_str(), _pmico_repoid, __FILE__);
-    CvXSUBANY(method_cv).any_ptr = (void *)newSVpv((char *)id, 0);
-
     // Set up the interface's operations and attributes
 
-    for ( int i = 0 ; i < desc->operations.length() ; i++) {
+    for ( unsigned int i = 0 ; i < desc->operations.length() ; i++) {
         CORBA::OperationDescription *opr = &desc->operations[i];
 	define_method (info->pkg.c_str(), "::", opr->name, OPERATION_BASE + i);
-	for ( int j = 0 ; j < opr->exceptions.length() ; j++)
+	for ( unsigned int j = 0 ; j < opr->exceptions.length() ; j++)
 	  define_exception ( opr->exceptions[j].id );
     }
 
-    for ( int i = 0 ; i < desc->attributes.length() ; i++) {
+    for ( unsigned int i = 0 ; i < desc->attributes.length() ; i++) {
 	if (desc->attributes[i].mode == CORBA::ATTR_NORMAL) {
 	    define_method (info->pkg.c_str(), "::_set_", desc->attributes[i].name, 
 			   SETTER_BASE + i);
@@ -368,30 +340,122 @@ pmico_load_interface (CORBA::InterfaceDef *_iface, CORBA::ORB_ptr _orb,
     
     AV *isa_av = perl_get_av ( (char *)(info->pkg + "::ISA").c_str(), TRUE );
 
-    for ( int i = 0 ; i < desc->base_interfaces.length() ; i++) {
-	if (pmico_find_interface_description(desc->base_interfaces[i]) == NULL) {
-	    {
+    for ( unsigned int i = 0 ; i < desc->base_interfaces.length() ; i++) {
+	PMicoIfaceInfo *info = pmico_find_interface_description(desc->base_interfaces[i]);
+	if (!info) {
 		CORBA::Contained_var base = iface_repository->lookup_id (desc->base_interfaces[i]);
 		if (!CORBA::is_nil (base) && 
 		    (base->def_kind() == CORBA::dk_Interface)) {
-		    CORBA::InterfaceDef_var i = CORBA::InterfaceDef::_narrow (base);
-		    pmico_load_interface (i, NULL, NULL);
-
-		    char *base_pkg = i->absolute_name();
-		    if (!strncmp(base_pkg, "::", 2))
-		      base_pkg += 2;
-
-		    av_push (isa_av, newSVpv(base_pkg, 0));
+		    CORBA::InterfaceDef_var intf = CORBA::InterfaceDef::_narrow (base);
+		    info = pmico_load_contained (intf, NULL, NULL);
 		}
-	    }
 	}
+	if (info)
+	    av_push (isa_av, newSVpv((char *)info->pkg.c_str(), 0));
     }
 
     if (desc->base_interfaces.length() == 0) {
 	av_push (isa_av, newSVpv("CORBA::Object", 0));
     }
-    
+
+    // Set up the server side package
+
+    isa_av = perl_get_av ( (char *)("POA_" + info->pkg + "::ISA").c_str(), TRUE );
+    av_push (isa_av, newSVpv("PortableServer::ServantBase", 0));
+
+    // Create a package method that will allow us to determine the
+    // repository id before we have the MICO object set up
+
+    string fullname = "POA_" + info->pkg + "::_pmico_repoid";
+    CV *method_cv = newXS ((char *)fullname.c_str(), _pmico_repoid, __FILE__);
+    CvXSUBANY(method_cv).any_ptr = (void *)newSVpv((char *)id, 0);
+
     return info;
+}
+
+void
+pmico_init_constant (const char *pkgname, CORBA::ConstantDef_ptr cd)
+{
+    CORBA::String_var name = cd->name();
+
+    // Extract the value
+
+    CORBA::Any_var value = cd->value();
+    SV *sv = pmico_from_any (value);
+
+    // Create a constant-valued sub with that value
+    
+    HV *stash = gv_stashpv ((char *)pkgname, TRUE);
+    newCONSTSUB (stash, name, sv);
+}
+
+PMicoIfaceInfo *
+pmico_load_contained (CORBA::Contained *_contained, CORBA::ORB_ptr _orb,
+		      const char *_id)
+{
+    assert (_contained != NULL || _id != NULL);
+
+    CORBA::Contained_var contained = CORBA::Contained::_duplicate (_contained);
+    
+    if (!contained) {
+	ensure_iface_repository (_orb);
+
+	contained = iface_repository->lookup_id((char *)_id);
+	if (CORBA::is_nil(contained))
+	    croak("Cannot find '%s' in interface repository", _id);
+    }
+
+    if (!iface_repository)
+	iface_repository = contained->containing_repository();
+
+    // If the container is an interface, suck all the information
+    // out of it for later use.
+
+    PMicoIfaceInfo *retval;
+    CORBA::InterfaceDef_var iface = CORBA::InterfaceDef::_narrow (contained);
+    if (iface)
+	retval = pmico_init_interface (iface, _id);
+    else
+	retval =  NULL;
+
+    // Initialize all constants in the container, and all
+    // enclosed interfaces.
+    
+    CORBA::Container_var container = CORBA::Container::_narrow (contained);
+    if (container) {
+
+	CORBA::ContainedSeq_var contents = 
+	    container->contents (CORBA::dk_Constant, true);
+
+	if (contents->length() > 0) {
+	    string pkgname;
+
+	    if (retval)
+		pkgname = retval->pkg.c_str();
+	    else {
+		CORBA::String_var pkg = contained->absolute_name();
+		if (!strncmp(pkg, "::", 2))
+		    pkgname = &pkg[2];
+		else
+		    pkgname = pkg;
+	    }
+
+	    for (CORBA::ULong i = 0; i<contents->length(); i++) {
+		CORBA::ConstantDef_var cd =
+		    CORBA::ConstantDef::_narrow (contents[i]);
+		pmico_init_constant (pkgname.c_str(), cd);
+	    }
+	}
+
+	contents = container->contents (CORBA::dk_Interface, true);
+
+	for (CORBA::ULong i = 0; i<contents->length(); i++) {
+	    if (!pmico_find_interface_description (contents[i]->id()))
+		pmico_load_contained (contents[i], _orb, NULL);
+	}
+    }
+
+    return retval;
 }
 
 static HV *typecode_cache;

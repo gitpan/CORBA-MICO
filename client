@@ -1,14 +1,11 @@
 #!/usr/bin/perl -w
 
 use CORBA::MICO;
-use CORBA::MICO::LongLong;
-use CORBA::MICO::LongDouble;
 use Error qw(:try);
 
 use strict;
 
 my $orb = CORBA::ORB_init("mico-local-orb");
-my $boa = $orb->BOA_init("mico-local-boa");
 
 open IOR, "account.ref";
 my $ior = <IOR>;
@@ -16,9 +13,9 @@ close IOR;
 
 my $account = $orb->string_to_object($ior);
 
-$account->_set_prefs ( { favorite_color => 'taupe',
-		         lottery_numbers => [ 21, 63, 83, 96 ],
-		         nickname => 'Dopey' });
+#$account->_set_prefs ( { favorite_color => 'taupe',
+#		         lottery_numbers => [ 21, 63, 83, 96 ],
+#		         nickname => 'Dopey' });
 
 #print "$$\n";
 #sleep 5;
@@ -74,7 +71,7 @@ try {
     my $e = shift;
     print STDERR "Oops. I don't have that much money\n";
     print STDERR "    (I need $e->{overdraft} more)\n";
-}
+};
 
 my $counter = $account->counter();
 print join(" ", map { $counter->next } (1..10)), "\n";

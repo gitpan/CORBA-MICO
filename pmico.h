@@ -10,6 +10,17 @@ extern "C" {
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+
+/* Some variables changed names between perl5.004 and perl5.005 */
+#ifdef PERL5004_COMPAT
+#define PL_na na
+#define PL_sv_yes sv_yes
+#define PL_sv_no sv_no
+
+/* this function was added in 5.005, so we provide it in constsub.c */
+void newCONSTSUB(HV *stash, char *name, SV *sv);
+#endif /* PERL5004_COMPAT */
+
 #ifdef __cplusplus
 }
 #endif
@@ -48,109 +59,43 @@ SV *              pmico_system_except   (const char *repoid,
 					 CORBA::CompletionStatus status);
 // Create a user exception object
 SV *              pmico_user_except     (const char *repoid, SV *value);
+// Create an exception object for some exception that we
+// are catching internally
+SV *              pmico_builtin_except (CORBA::Exception *ex);
 // Throw a user exception object as a Perl exception
 void              pmico_throw           (SV *e);
 
+// Create an exception object for an exception thrown by the POA
 
 // ==== From interfaces.cc ====
 
-// Given either an interface definition, or a repository ID, load
-// the definition of the interface from the repository. orb optionally
+// Given either a pointer to an IR object, or a repository ID, load
+// the definition of the IR object from the repository. _orb optionally
 // gives the orb to resolve the initial InterfaceRepository in
 // if iface is not specified
-PMicoIfaceInfo *  pmico_load_interface  (CORBA::InterfaceDef *_iface, 
-					 CORBA::ORB_ptr orb,
+PMicoIfaceInfo *  pmico_load_contained  (CORBA::Contained_ptr _container, 
+					 CORBA::ORB_ptr _orb,
 					 const char *_id);
 // Look up interface information for a given repoid
 PMicoIfaceInfo *  pmico_find_interface_description (const char *repo_id);
-// Callback when perl object is destroyed
-void              pmico_instvars_destroy (PMicoInstVars *instvars);
 
 // Find or create a TypeCode object for the given object
 SV *              pmico_lookup_typecode (const char *id);
 
 // Initialize typecodes for the standard types
-void              pmico_init_typecodes (void);
+void              pmico_init_typecodes  (void);
 
 // ==== From types.cc ====
 
 // Find or create a Perl object for a given CORBA::Object
-SV *              pmico_find_or_create   (CORBA::Object *obj);
-// Magically add an InstVars structure to a perl object
-PMicoInstVars *   pmico_instvars_add     (SV            *perl_obj);
-// Get the InstVars structure for an object
-PMicoInstVars *   pmico_instvars_get     (SV            *perl_obj);
+SV *              pmico_objref_to_sv     (CORBA::Object *obj);
 // Given a Perl object which is a descendant of CORBA::Object, find
 // or create the corresponding C++ CORBA::Object
-CORBA::Object_ptr pmico_sv_to_obj        (SV            *perl_obj);
-// Initialize a true Perl object. All arguments other than perlobj are
-// optional
-PMicoInstVars *   pmico_init_obj         (SV                        *perlobj, 
-					  CORBA::Object             *o, 
-					  CORBA::BOA::ReferenceData *refdata,
-					  CORBA::InterfaceDef       *iface, 
-					  CORBA::ImplementationDef  *impl,
-					  const char                *repoid);
+CORBA::Object_ptr pmico_sv_to_objref     (SV            *perl_obj);
+// Removes an object from the pin table
+void              pmico_objref_destroy   (CORBA::Object *obj);
 
 // Write the contents of sv into res, using res->type
 bool              pmico_to_any           (CORBA::Any *res, SV *sv);
 // Create a SV (perl data structure) from an Any
 SV *              pmico_from_any         (CORBA::Any *any);
-
-
-
-
-// ==== From true.cc ====
-
-// Generic object restorer
-
-class PMicoRestorer : public CORBA::BOAObjectRestorer {
-    HV *restorers;
-    HV *binders;
-    
-public:
-    PMicoRestorer ();
-    ~PMicoRestorer ();
-
-    CORBA::Boolean restore (CORBA::Object_ptr);
-    CORBA::Boolean bind (const char *repoid,
-			 const SequenceTmpl<CORBA::OctetWrapper> &tag);
-    
-    void add_restorer (char *repoid, SV *callback);
-    void add_binder   (char *repoid, SV *callback);
-};
-
-// Class that handles method invocations for a object incarnated
-// in a Perl object.
-class PMicoTrueObject : public CORBA::DynamicImplementation {
-public:
-    PMicoTrueObject (SV *_perlobj, const char *repoid);
-    virtual ~PMicoTrueObject ();
-    virtual void invoke ( CORBA::ServerRequest_ptr _req,
-			  CORBA::Environment &_env );
-    virtual CORBA::Boolean _save_object ();
-    void servant_destroyed ();	// Etherealize ?
-
-private:
-    CORBA::OperationDescription *find_operation (CORBA::InterfaceDef::FullInterfaceDescription *d, const char *name);
-    CORBA::AttributeDescription *find_attribute (CORBA::InterfaceDef::FullInterfaceDescription *d, const char *name, bool set);
-    CORBA::NVList_ptr  PMicoTrueObject::build_args ( const char *name, 
-						     int &return_items,
-						     CORBA::TypeCode *&return_type,
-						     int &inout_items);
-    CORBA::Exception *encode_exception ( const char *name, 
-					     SV *perl_except );
-
-    SV *perlobj;
-    CORBA::InterfaceDef::FullInterfaceDescription *desc;
-};
-
-// Information attached to a Perl stub or true object via '~' magic
-struct PMicoInstVars
-{
-    U32 magic;	                // 0x18981972 
-    CORBA::Object_ptr obj;
-    PMicoTrueObject *trueobj;
-    string *repoid;		// owned
-};
-

@@ -1,5 +1,7 @@
 module Account {
 
+  const long DAILY_MAX = 1000;
+
   typedef char Face[6][10];
   typedef fixed<16,2> Amount;
 
@@ -17,6 +19,7 @@ module Account {
       taupe, burgundy, chartreuse
     };
     struct Preferences {
+
       Color favorite_color;
       numbers lottery_numbers;
       string nickname;
