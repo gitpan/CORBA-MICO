@@ -4,112 +4,33 @@ eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
 use POSIX qw(LC_NUMERIC);
+use Error qw(:try);
+
 use Gtk 0.7006;
-use CORBA::MICO ids => [ 'IDL:omg.org/CORBA:1.0' => undef ];
+#use CORBA::MICO ids => [ 'IDL:omg.org/CORBA:1.0' => undef ];
+use CORBA::MICO;
 
 use CORBA::MICO::IRRoot;
+use CORBA::MICO::NCRoot;
 
-use CORBA::MICO::Misc;
-use CORBA::MICO::Hypertext;
-use CORBA::MICO::Pixtree;
-use CORBA::MICO::IR2Dia;
+use CORBA::MICO::Misc qw(status_line_create);
+use CORBA::MICO::IR;
+use CORBA::MICO::NC;
+use CORBA::MICO::BGQueue;
+use CORBA::MICO::CMenu;
 
 use strict;
 
 #--------------------------------------------------------------------
 # Global variables
 #--------------------------------------------------------------------
-my $root_ir;            # root IR
-
 my $skip_names='(CORBA[:\/])';
 $skip_names = '';
 
+my $bg_sched;        # scheduler for background processing
+
 # Gtk variables
-my $ctree_window;       # toplevel window
-my $text;               # Text widget
-my $ctree;              # CTree widget
-my $selected_node;      # Current (selected) node, undef - no selected node
-my $item_factory;       # Main item factory
-my $book_open;          # expanded subtree pixmap
-my $book_open_mask;     # ... and mask
-my $book_closed;        # closed subtree pixmap
-my $book_closed_mask;   # ... and mask
-my $mini_page;          # leaf pixmap
-my $mini_page_mask;     # ... and mask
-
-my %ir_items;           # hash -> IR object name => IR object
-
-# pixmap cache variables
-my @book_open_xpm = (
-"16 16 4 1",
-"       c None s None",
-".      c black",
-"X      c #808080",
-"o      c white",
-"                ",
-"  ..            ",
-" .Xo.    ...    ",
-" .Xoo. ..oo.    ",
-" .Xooo.Xooo...  ",
-" .Xooo.oooo.X.  ",
-" .Xooo.Xooo.X.  ",
-" .Xooo.oooo.X.  ",
-" .Xooo.Xooo.X.  ",
-" .Xooo.oooo.X.  ",
-"  .Xoo.Xoo..X.  ",
-"   .Xo.o..ooX.  ",
-"    .X..XXXXX.  ",
-"    ..X.......  ",
-"     ..         ",
-"                ");
-
-my @book_closed_xpm = (
-"16 16 6 1",
-"       c None s None",
-".      c black",
-"X      c red",
-"o      c yellow",
-"O      c #808080",
-"#      c white",
-"                ",
-"       ..       ",
-"     ..XX.      ",
-"   ..XXXXX.     ",
-" ..XXXXXXXX.    ",
-".ooXXXXXXXXX.   ",
-"..ooXXXXXXXXX.  ",
-".X.ooXXXXXXXXX. ",
-".XX.ooXXXXXX..  ",
-" .XX.ooXXX..#O  ",
-"  .XX.oo..##OO. ",
-"   .XX..##OO..  ",
-"    .X.#OO..    ",
-"     ..O..      ",
-"      ..        ",
-"                ");
-
-my @mini_page_xpm = (
-"16 16 4 1",
-"       c None s None",
-".      c black",
-"X      c white",
-"o      c #808080",
-"                ",
-"   .......      ",
-"   .XXXXX..     ",
-"   .XoooX.X.    ",
-"   .XXXXX....   ",
-"   .XooooXoo.o  ",
-"   .XXXXXXXX.o  ",
-"   .XooooooX.o  ",
-"   .XXXXXXXX.o  ",
-"   .XooooooX.o  ",
-"   .XXXXXXXX.o  ",
-"   .XooooooX.o  ",
-"   .XXXXXXXX.o  ",
-"   ..........o  ",
-"    oooooooooo  ",
-"                ");
+my $topwindow;       # toplevel window
 
 #--------------------------------------------------------------------
 # Signal handlers
@@ -128,949 +49,122 @@ sub destroy_exit {
 }
 
 #--------------------------------------------------------------------
-# get value of 'any' (translate boolean values to string representation)
-#--------------------------------------------------------------------
-sub any_value {
-  my $any = shift;
-  my $kind = tc_unalias($any->type());
-  my $retval = $any->value();
-  if( $kind eq "tk_boolean" ) {
-    $retval = $retval ? "TRUE" : "FALSE";
-  }
-  elsif ( $kind eq "tk_string" ) {
-    $retval = qq("$retval");
-  }
-  elsif ( $kind eq "tk_wstring" ) {
-    $retval = qq(L"$retval");
-  }
-  return $retval;
+# Notebook: page selected signal
+sub notebook_switch_page {
+  my ($notebook, $page_object, $page, $page_num) = @_;
+  #$page_object->prepare();
+  activate_object($notebook, $page_object, $page_num);
 }
 
 #--------------------------------------------------------------------
-# unalias typecode, return corresponding TCKind
-#--------------------------------------------------------------------
-sub tc_unalias {
-  my $tc = shift; 
-  while( $tc->kind() eq "tk_alias" ) {
-    $tc = $tc->content_type();
-  }
-  return $tc->kind();
-}
-
-#--------------------------------------------------------------------
-# Get full qualified name of IR object
-#--------------------------------------------------------------------
-sub get_abs_name {        
-  my $ir_node = shift;
-  my ($ret) = $ir_node->_get_absolute_name() =~ /^\s*:*(.*)/;
-  return $ret;
-}
-
-#--------------------------------------------------------------------
-# tc_name: return string representation of type
-#--------------------------------------------------------------------
-my %named_types = (
-    'tk_objref'	                => 1,
-    'tk_struct'	                => 1,
-    'tk_union'	                => 1,
-    'tk_enum'	                => 1,
-    'tk_alias'	                => 1,
-    'tk_except'	                => 1,
-    'tk_native'	                => 1,
-    'tk_abstract_interface'	=> 1,
-    'tk_value'	                => 1,
-    'tk_value_box'              => 1
-);
-sub tc_name {
-  my ($tc, $items) = @_;
-  my $k = $tc->kind();
-  if( defined($named_types{$k}) ) {
-    # find full-qualified name of user-defined type
-    my $repoid = $tc->id();
-    if( $repoid ) {
-      my $ir_node = $root_ir->entry_by_id($repoid); 
-      if( $ir_node ) {
-        my $ret = $ir_node->name();
-        if( defined($items) ) {
-          $items->{$ret} = $ir_node->ir_node();
-          $ret = join('', CORBA::MICO::Hypertext::item_prefix, 
-                          $ret,
-                          CORBA::MICO::Hypertext::item_suffix);
-        }
-        return $ret;
-      }
-    }
-    return $tc->name();
-  }
-  $k =~ s/^tk_//;
-  if( $k eq "string" or $k eq "wstring") {
-    my $l = $tc->length();
-    return $l ? "$k <$l>" : $k;
-  }
-  if( $k eq "sequence" ) {
-    my $l = $tc->length();
-    my $content = tc_name($tc->content_type(), $items);
-    return $l ? "$k <$content,$l>" : "$k <$content>";
-  }
-  if( $k eq "array" ) {
-    my $l = $tc->length();
-    my $content = tc_name($tc->content_type(), $items);
-    return "$content [$l]";
-  }
-  if( $k eq "fixed" ) {
-    return "$k<" . $tc->fixed_digits() . "," . $tc->fixed_scale() . ">";
-  }
-  return $k;
-}
-
-#--------------------------------------------------------------------
-# prm_mode: return string representation of operation parameter mode
-#--------------------------------------------------------------------
-my %prm_mode_remap = (
-    'PARAM_IN'    => 'in',
-    'PARAM_OUT'   => 'out',
-    'PARAM_INOUT' => 'inout'
-);
-
-sub prm_mode {
-  my $mode = shift;
-  return $prm_mode_remap{$mode};
-}
-
-#--------------------------------------------------------------------
-# opn_mode: return string representation of operation mode
-#--------------------------------------------------------------------
-sub opn_mode {
-  my $mode = shift;
-  return (defined($mode) and $mode eq "OP_ONEWAY") ? "oneway " : "";
-}
-
-#--------------------------------------------------------------------
-# attr_mode: return string representation of attribute mode
-#--------------------------------------------------------------------
-sub attr_mode {
-  my $mode = shift;
-  return (defined($mode) and $mode eq "ATTR_READONLY") ? "readonly " : "";
-}
-
-#--------------------------------------------------------------------
-# create_list: create a list from array of objects
-# 3 arguments:
-#  $src_objs: reference to list of objects,
-#  $prefix: string will be prepended to return value (if it is not empty)
-#  $postfix: string will be appended to return value (if it is not empty)
-#  $sep: list separator (", " by default)
-#  $callback: function returning description of object (_get_name by default)
-#--------------------------------------------------------------------
-sub create_list {
-  my ($src_objs, $prefix, $postfix, $sep, $callback) = @_;
-  $prefix = ""                         if !defined($prefix);
-  $postfix = ""                        if !defined($postfix);
-  $sep = ", "                          if !defined($sep);
-  $callback = sub { $_[0]->_get_name } if !defined($callback);
-  my @list;
-  foreach my $child (@$src_objs) {
-    my $desc = &$callback($child);
-    push(@list, $desc) if $desc;
-  }
-  return @list ? ($prefix . join($sep, @list) . $postfix) : "";
-}
-
-#--------------------------------------------------------------------
-# IR nodes processing
-#--------------------------------------------------------------------
-#                kind                 handler      flag: 1-container/0-else
-my %ir_nodes = (
-              'dk_Exception'   => [\&create_exception,   1],
-              'dk_Interface'   => [\&create_interface,   1],
-              'dk_Module'      => [\&create_module,      1],
-              'dk_Repository'  => [\&create_repository,  1],
-              'dk_Struct'      => [\&create_struct,      1],
-              'dk_Value'       => [\&create_value,       1],
-              'dk_Union'       => [\&create_union,       0],
-              'dk_Attribute'   => [\&create_attribute,   0],
-              'dk_Constant'    => [\&create_constant,    0],
-              'dk_Operation'   => [\&create_operation,   0],
-              'dk_Typedef'     => [\&create_typedef,     0],
-              'dk_Alias'       => [\&create_alias,       0],
-              'dk_Enum'        => [\&create_enum,        0],
-              'dk_Primitive'   => [\&create_primitive,   0],
-              'dk_String'      => [\&create_string,      0],
-              'dk_Sequence'    => [\&create_sequence,    0],
-              'dk_Array'       => [\&create_array,       0],
-              'dk_Wstring'     => [\&create_wstring,     0],
-              'dk_Fixed'       => [\&create_fixed,       0],
-              'dk_ValueBox'    => [\&create_valuebox,    0],
-              'dk_ValueMember' => [\&create_valuemember, 0],
-              'dk_Native'      => [\&create_native,      0],
-              );
-
-#--------------------------------------------------------------------
-# subroutines preparing node descriptions for IR objects
-#--------------------------------------------------------------------
-sub create_exception {
-  my($ir_node, $name, $items) = @_;
-  my @retarray = ("exception $name");
-  my $members = $ir_node->_get_members();
-  my $tail = defined($items) ? ";" : "";
-  for my $member (@$members) {
-    push(@retarray, 
-         tc_name($member->{"type"}, $items) . " $member->{name}" . $tail);
-  }
-  return \@retarray;
-}
-
-#--------------------------------------------------------------------
-sub create_interface {
-  my($ir_node, $name, $items) = @_;
-  my $ret = "";
-  $ret = "abstract " if( $ir_node->_get_is_abstract() );
-  $ret .= "interface $name";
-  my $parents = $ir_node->_get_base_interfaces();
-  if( defined($items) ) {
-    my @inames;
-    foreach my $itf (@$parents) {
-      my $aname = $itf->_get_absolute_name();
-      $items->{$aname} = $itf;
-      push(@inames, CORBA::MICO::Hypertext::item_prefix . $aname . CORBA::MICO::Hypertext::item_suffix);
-    }
-    $ret .= (': ' . join(', ', @inames)) if $#$parents >= 0;
-    my $contents = $ir_node->contents("dk_all", 1);
-    $ret .= ' {};' unless @$contents;
-  }
-  else {
-    $ret .= create_list($parents, ": ");
-  }
-  return [$ret];
-}
-
-#--------------------------------------------------------------------
-sub mk_if_tree {
-  my $ir_node = shift;
-  my $parents = $ir_node->parents();
-  my @if_tree = ();
-  my $i = 0;
-  foreach my $p (@$parents) {
-    $if_tree[$i][0] = $p->name();
-    $if_tree[$i][1] = mk_if_tree($p);
-    $i++;
-  }
-  return \@if_tree; 
-}
-
-#--------------------------------------------------------------------
-sub create_module {
-  my($ir_node, $name) = @_;
-  return ["module $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_repository {
-  my($ir_node, $name) = @_;
-  return ["Repository $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_struct {
-  my($ir_node, $name, $items) = @_;
-  my @retarray = ("struct $name");
-  my $members = $ir_node->_get_members();
-  my $tail = defined($items) ? ";" : "";
-  for my $member (@$members) {
-    push(@retarray, 
-      tc_name($member->{"type"}, $items) . " $member->{name}" . $tail);
-  }
-  return \@retarray;
-}
-
-#--------------------------------------------------------------------
-sub create_value {
-  my($ir_node, $name, $items) = @_;
-  my $ret = "";
-  $ret .= "abstract " if( $ir_node->_get_is_abstract() );
-  $ret .= "custom "   if( $ir_node->_get_is_custom() );
-  $ret .= "valuetype $name";
-
-  # prepare list of parents
-  my $prefix .= ": ";
-  $prefix .= "trancatable " if $ir_node->_get_is_truncatable();
-  my $base = $ir_node->_get_base_value();
-  $ret .= "$prefix $base " if defined($base);
-  $ret .= create_list($ir_node->_get_abstract_base_values(), 
-                                                    $base ? ", " : $prefix);
-  $ret .= create_list($ir_node->_get_supported_interfaces(), " supports ");
-  my @retarray = ($ret);
-  my $tail = defined($items) ? ";" : "";
-  my $inits = $ir_node->_get_initializers();
-  foreach my $i (@$inits) {
-    # create factory desc: 'factory <name> (in <param_type> param_name, ...)'
-    my $fact = create_list(
-         $i->{"members"},                         # objects
-         "",                                      # prefix
-         "",                                      # postfix
-         ", ",                                    # separator
-         sub {          
-               "in " .  tc_name($_[0]->{"type"}, $items) . " $_[0]->{name}";
-         }                                        # callback
-       );
-    push(@retarray, "factory $i->{name}(" . $fact . ")" . $tail);
-  }
-  if( $items and @retarray == 1 ) {
-    my $contents = $ir_node->contents("dk_all", 1);
-    $retarray[0] .= ' {};' unless @$contents;
-  }
-  return \@retarray;
-}
-
-#--------------------------------------------------------------------
-sub create_union {
-  my($ir_node, $name, $items) = @_;
-  my $dtype = tc_name($ir_node->_get_discriminator_type(), $items);
-  my @retarray = ("union $name switch($dtype)");
-  my $tail = defined($items) ? ";" : "";
-  my $members = $ir_node->_get_members();
-  for my $member (@$members) {
-    my $type = $member->{"type"};
-    my $val = any_value($member->{"label"});
-    my $alt;
-    if( $member->{"label"}->type()->kind() eq "tk_octet" and $val == 0 ) {
-      $alt = "default: " .  tc_name($type, $items) . " $member->{name}$tail";
-    }
-    else {
-      $alt = "case $val: " . tc_name($type, $items) . " $member->{name}$tail";
-    }
-    push(@retarray, $alt);
-  }
-  return \@retarray;
-}
-
-#--------------------------------------------------------------------
-sub create_attribute {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  return [  attr_mode($ir_node->_get_mode)
-          . "attribute "
-          . tc_name($ir_node->_get_type(), $items) . " $name$tail"];
-}
-
-#--------------------------------------------------------------------
-sub create_constant {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  return ["const " . tc_name($ir_node->_get_type(), $items) . " $name = " . 
-          any_value($ir_node->_get_value()) . $tail];
-}
-
-#--------------------------------------------------------------------
-sub create_operation {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  my $res = opn_mode($ir_node->_get_mode())           # operation mode
-          . tc_name($ir_node->_get_result(), $items)  # result type
-          . " $name(";                                # opertion name
-
-  # create list of params: 'in <param_type> <param_name>, ...'
-  my $list = create_list(
-       $ir_node->_get_params(),                 # objects
-       "",                                      # prefix
-       "",                                      # postfix
-       ", ",                                    # separator
-       sub {          
-             prm_mode($_[0]->{"mode"}) . " " .
-             tc_name($_[0]->{"type"}, $items) .
-             " $_[0]->{name}";
-       }                                        # callback
-     );
-  $res .= $list . ")";
-
-  # create list of exceptions 'raises( <name>, ... )'
-  $res .= create_list(
-                      $ir_node->_get_exceptions(),                  # objects
-                      " raises(",                                   # prefix
-                      ")",                                          # postfix
-                      ", ",                                         # separator
-                      sub { tc_name($_[0]->_get_type(), $items); }  # callback
-                     );
-  # create context list 'context( <name>, ... )'
-  $res .= create_list(
-                      $ir_node->_get_contexts(),               # objects
-                      " context(",                             # prefix
-                      ")",                                     # postfix
-                      ", ",                                    # separator
-                      sub { "\"$_[0]\""; }                     # callback
-                     );
-  return [$res . $tail];
-}
-
-#--------------------------------------------------------------------
-sub create_typedef {
-  my($ir_node, $name, $items) = @_;
-  return ["Typedef $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_alias {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  return [  "typedef "
-          . tc_name($ir_node->_get_original_type_def()->_get_type(), $items) 
-          . " $name$tail"];
-}
-
-#--------------------------------------------------------------------
-sub create_enum {
-  my($ir_node, $name, $items) = @_;
-  my $members = $ir_node->_get_members();
-  return ["enum $name", @$members] unless defined($items);
-  my @retval = ("enum $name");
-  foreach my $m (@$members) {
-    push(@retval, $m . ",");
-  }
-  return \@retval;
-}
-
-#--------------------------------------------------------------------
-sub create_primitive {
-  my($ir_node, $name, $items) = @_;
-  return ["primitive $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_string {
-  my($ir_node, $name, $items) = @_;
-  return [tc_name($ir_node->_get_type(), $items) . " $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_sequence {
-  my($ir_node, $name, $items) = @_;
-  return [tc_name($ir_node->_get_type(), $items) . " $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_array {
-  my($ir_node, $name, $items) = @_;
-  return [tc_name($ir_node->_get_type(), $items) . " $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_wstring {
-  my($ir_node, $name, $items) = @_;
-  return [tc_name($ir_node->_get_type(), $items) . " $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_fixed {
-  my($ir_node, $name, $items) = @_;
-  return [tc_name($ir_node->_get_type(), $items) . " $name"];
-}
-
-#--------------------------------------------------------------------
-sub create_valuebox {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  return [  "valuetype $name " 
-          . tc_name($ir_node->_get_original_type_def()->_get_type(), $items) 
-          . $tail];
-}
-
-#--------------------------------------------------------------------
-sub create_valuemember {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  my $vis = ($ir_node->_get_access() == CORBA::PUBLIC_MEMBER()) 
-                                               ? "public" : "private";
-  return ["$vis " . tc_name($ir_node->_get_type(), $items) . " $name$tail"];
-}
-
-#--------------------------------------------------------------------
-sub create_native {
-  my($ir_node, $name, $items) = @_;
-  my $tail = defined($items) ? ";" : "";
-  return ["native $name$tail"];
-}
-
-#--------------------------------------------------------------------
-# Call appropriate function to create node description,
-# insert corresponding node (with ancestors if any) into CTree
-#--------------------------------------------------------------------
-sub create_node {
-  my($ctree, $parent, $ir_node, $name, $queue) = @_;
-  return undef if $skip_names and $ir_node->repoid() =~ /$skip_names/;
-  my $entry = $ir_nodes{ $ir_node->kind() };
-  if( defined($entry) ) {
-    my $desc = $entry->[0]($ir_node->ir_node(), $name, undef);
-    my $contents = $ir_node->contents("dk_all") || [];
-    return add_contents_to_node($ctree, $parent, 
-                                $ir_node, $desc, [ @$contents ], $queue);
-  }
-  return undef;
-}
-
-#--------------------------------------------------------------------
-# Create a node with given IR object desc and contents 
-#--------------------------------------------------------------------
-sub add_contents_to_node {
-  my($ctree, $parent, $ir_node, $desc, $contents, $queue) = @_;
-  my $ret;
-  #$contents = [ @$contents ];   # make a copy
-  if( $#$contents >= 0 ) {
-    $ret = add_tree_node($ctree,
-                         $parent, $desc, 0, [$ir_node, $contents]); 
-    my $first = shift @$contents;
-    if( @$contents and defined($ctree) ) {
-      # Add node for background processing
-      push(@$queue, $ret) if @$contents and defined($ctree);
-    }  
-    create_node($ctree, $ret, $first, $first->shname(), $queue); 
-  }
-  else {
-    # not container  
-    $ret = add_tree_node($ctree, $parent, $desc, 1, [$ir_node, undef]);
-  }
-  if( defined($ctree) and not defined($ir_node) ) {
-    $ctree->node_set_selectable($ret, 0);
-  }
-  return $ret;
-}
-
-#--------------------------------------------------------------------
-# Add nodes for list of children($contents)
-#--------------------------------------------------------------------
-sub create_subtree {
-  my($ctree, $parent, $contents, $queue) = @_;
-  foreach my $c (@$contents) {
-    create_node($ctree, $parent, $c, $c->shname(), $queue);
+# Activate page object: called when corresponding page becomes active
+sub activate_object {
+  my ($notebook, $object, $page_num) = @_;
+  if( not defined($page_num) or
+      $notebook->page_num($object->widget()) == $page_num ) {
+    $object->prepare();
+    $object->activate();
+    $bg_sched->set_active_object($object);
   }
 }
 
 #--------------------------------------------------------------------
-# insert into CTree a node with given description & descriptions of children
-# desc is a list of descriptions:
-#    desc[0]   - description of node
-#    desc[1..] - descriptions of children
-# Arguments:
-#    ctree, parent - ctree & parent node
-#    desc - descriptions (see above)
-#    is_leaf - TRUE if a node is a leaf, false else
-#    rowdata - raw data to be attached to the node
-sub add_tree_node {
-  my($ctree, $parent, $desc, $is_leaf, $rowdata) = @_;
-  $is_leaf = 0 if $#$desc >= 1;
-  if( not defined($ctree) ) {
-    # Add to buffered area - not really to Ctree
-    my %node = ( 'DESC'     => $desc,
-                 'IS_LEAF'  => $is_leaf,
-                 'DATA'     => $rowdata,
-                 'CHILDREN' => [] );
-    push(@{$parent->{'CHILDREN'}}, \%node) if defined($parent);
-    return \%node;
-  }
-  # ctree defined -> add directly to the tree
-  my $ret = $ctree->insert_node($parent, undef, 
-                                [ $desc->[0] ],
-                                5,
-                                $is_leaf ? $mini_page : $book_closed,
-                                $is_leaf ? $mini_page_mask : $book_closed_mask,
-                                $is_leaf ? undef : $book_open, 
-                                $is_leaf ? undef : $book_open_mask,
-                                $is_leaf,
-                                0
-                               );
-  if( defined($rowdata) ) {
-    $ctree->node_set_row_data($ret, $rowdata);
-  }
-  else {
-    $ctree->node_set_selectable($ret, 0);
-  }
-  shift @$desc;
-  foreach my $d (@$desc) {
-    add_tree_node($ctree, $ret, [$d], 1);
-  }
-  return $ret;
-}
-
-#--------------------------------------------------------------------
-# Signal handler: CTree row selected
-# args: ctree, tree node
-#--------------------------------------------------------------------
-sub row_selected {
-  my ($ctree, $row) = @_;
-  $selected_node = $row;
-  mask_menu();
-}
-
-#--------------------------------------------------------------------
-# Signal handler: CTree row unselected
-# args: ctree, tree node
-#--------------------------------------------------------------------
-sub row_unselected {
-  $selected_node = undef;
-  mask_menu();
-}
-
-#--------------------------------------------------------------------
-# Signal handler: CTree row is to be expanded
-# args: ctree, tree node
-#--------------------------------------------------------------------
-sub row_expanded {
-  my ($ctree, $queue, $node) = @_;
-  return expand_row($ctree, $queue, $node);
-}
-
-#--------------------------------------------------------------------
-# Insert buffered nodes directly to the CTree
-#--------------------------------------------------------------------
-sub insert_buffered {
-  my ($ctree, $parent, $buffered) = @_;
-  my $node = add_tree_node($ctree, $parent, 
-                           $buffered->{'DESC'},
-                           $buffered->{'IS_LEAF'},
-                           $buffered->{'DATA'});
-  foreach my $bchild (@{$buffered->{'CHILDREN'}}) {
-    insert_buffered($ctree, $node, $bchild);
-  }
-}
-
-#--------------------------------------------------------------------
-# Insert corresponding subnodes to a node if there are some ones
-# not inserted yet
-#--------------------------------------------------------------------
-sub expand_row {
-  my ($ctree, $queue, $node) = @_;
-  my $ud = $ctree->node_get_row_data($node);
-  my $contents = $ud->[1];
-  my $buffered = $ud->[2];
-  return 1 unless defined($contents) or defined($buffered);
-  return 1 if CORBA::MICO::Misc::cursor_watch($ctree_window, 1);
-  $ctree->hide();
-  if( defined($buffered) ) {
-    # insert buffered subnodes (if any)
-    foreach my $b (@$buffered) {
-      insert_buffered($ctree, $node, $b);
-    }
-    $ud->[2] = undef;
-  }
-  if( defined($contents) ) {
-    # insert new (unbuffered) subnodes (if any) into CTree
-    my $ir_node = $ud->[0];
-    create_subtree($ctree, $node, $contents, $queue);
-    $ud->[1] = undef;   # mark node as fully constructed
-  }
-  CORBA::MICO::Misc::cursor_restore_to_default($ctree_window, 0);
-  $ctree->show();
-}
-
-#--------------------------------------------------------------------
-# Background processing: retrieve IR objects information
-# for nodes and put it to buffered area
-# $queue contains nodes having non-processed child IR objects
-#--------------------------------------------------------------------
-sub timeout_hnd {
-  my ($ctree, $queue) = @_;
-  my $node = shift @$queue;
-  # print "Background processing ended\n" unless defined $node;
-  return 0 unless defined $node;        # Remove handler if queue is empty
-  my $ud = $ctree->node_get_row_data($node);
-  my $contents = $ud->[1];              # IR node children
-  return 1 unless defined $contents;    # Do nothing if no children
-  if( @$contents == 0 ) {
-    $ud->[1] = undef;                   # Array empty -> undef it & do nothing
-    return 1;
-  }
-  my $buffered = $ud->[2];
-  if( not defined($buffered) ) {
-    $buffered = [];                     # No buffered area yet -> create it
-    $ud->[2] = $buffered;
-  }
-  # process a child
-  my $child = shift @$contents;
-  my $bnode = create_node(undef, undef, $child, $child->shname(), $queue);
-  push(@$buffered, $bnode) if $bnode;   # Add node desc to buffered area
-  push(@$queue, $node);                 # Push node to the end of queue
-  return 1;
-}
-
-#--------------------------------------------------------------------
-# Hypertext handler
-# args: item_name, %ir_items
-# Returns a list of lines to be shown
-sub hypertext_cb {
-  my ($name, $items) = @_;
-  my $ir_node = $root_ir->entry($name);
-  my @retval = ("#pragma ID $name \"" . $ir_node->repoid() . '"');
-  push(@retval, @{prepare_text($ir_node, $name, $items)});
-  return \@retval;
-}
-
-#--------------------------------------------------------------------
-# Prepare a human-readable representation of IR object to be
-# shown in right side text wondow
-#--------------------------------------------------------------------
-sub prepare_text {
-  my($ir_node, $name, $items) = @_;
-  my $entry = $ir_nodes{ $ir_node->kind() };
-  return undef unless defined($entry);
-  my $desc = $entry->[0]($ir_node->ir_node(), $name, $items);
-  if( $entry->[1] ) {
-#     container  
-    my $contents = $ir_node->contents("dk_all");
-    if( $#$contents >= 0 ) {
-      foreach my $c (@$contents) {
-        my $child_desc = prepare_text($c, $c->shname(), $items);
-        push(@$desc, @$child_desc);
-      }
-    }
-  }
-  if( @$desc > 1 ) {
-    # post-process compound IR object
-    $desc->[0] .= " {";
-    for( my $i = 1; $i < @$desc; ++$i ) {
-      $desc->[$i] =~ s/^/  /;
-    }
-    push( @$desc, "};" );
-  }
-  return $desc;
-}
-
-#--------------------------------------------------------------------
-# Show interface inheritance tree via CORBA::MICO::Pixtree
-#--------------------------------------------------------------------
-sub show_interface_tree {
-  my ($name, $nodes) = @_;
-if(0) {  
-$nodes = $root_ir->contents('dk_Interface');
-my @intfs = grep { $_->shname() =~ /^DB_/ } @$nodes;
-$nodes = \@intfs;
-}
-  return unless @$nodes;
-  my $dialog = new Gtk::Window('toplevel');
-  $dialog->set_default_size(400, 200);
-  $dialog->position('mouse');
-  my $pixtree = CORBA::MICO::Pixtree::pixtree_create();
-  CORBA::MICO::Pixtree::pixtree_show($pixtree, $nodes);
-  $dialog->set_title($name);
-  $dialog->add($pixtree);
-  $dialog->show_all();
-  $dialog->realize();
-}
-
-#--------------------------------------------------------------------
-# Show interface inheritance tree via CORBA::MICO::Pixtree
-#--------------------------------------------------------------------
-sub export_to_dia {
-  my ($name, $nodes) = @_;
-  return unless @$nodes;
-  my ($fname) = $name =~ /.*:(.*)/;
-if(0) {
-$nodes = $root_ir->contents('dk_Interface');
-my @intfs = grep { $_->shname() =~ /^DB_/ } @$nodes;
-$nodes = \@intfs;
-$fname = "Unibank.xml";
-}
-  CORBA::MICO::Misc::select_file("Export $name to DIA",
-                   "${fname}.xml", 0,
-                   sub { CORBA::MICO::IR2Dia::dump_interface($_[0], $nodes) } );
-}
-
-#--------------------------------------------------------------------
-# Get contained objects.
-# Args: $ir_node - IR object
-#       (types)  - types of contained objects should be retrieved
-#--------------------------------------------------------------------
-sub ir_contents {
-  my $ir_node = shift;
-  my @retval = ();
-  foreach my $type (@_) {
-    my $contents = $ir_node->contents($type, 1);
-    push (@retval, @$contents);
-  }
-  return \@retval;
-}
-
-#--------------------------------------------------------------------
-# Item factory entries
-my @item_factory_entries = (
-  ['/_File',                   undef,          0,     '<Branch>'    ],
-  ['/File/_Quit',              '<control>Q',   99,    '<Item>'      ],
-  ['/_Selected',               undef,          0,     '<Branch>'    ],
-  ['/_Selected/_IDL',          undef,          1,     '<Item>'      ],
-  ['/_Selected/_Inheritance',  undef,          2,     '<Item>'      ],
-  ['/_Selected/Export to DIA', undef,          3,     '<Item>'      ],
-
-  ['/_Help',                   undef,          0,     '<LastBranch>'],
-  ['/Help/_About',             undef,          10,    '<Item>'      ]
-);
-
-#--------------------------------------------------------------------
-# Signal handler: menu item activated
-#--------------------------------------------------------------------
-sub item_factory_activated {
-  my ($widget, $action) = @_;
-  if( $action == 99 ) {
-    # exit
-    Gtk->main_quit();
-    return;
-  }
-  if( $action == 10 ) {
-    # about
-    return;
-  }
-
-  if( $action == 1 || $action == 2 || $action == 3 ) {
-    return unless defined($selected_node);
-    my $ud = $ctree->node_get_row_data($selected_node);
-    my $ir_node = $ud->[0];
-    return unless defined $ir_node;
-    my $name = $ir_node->name();
-    $ir_items{$name} = $ir_node;
-    if( $action == 3 ) {
-      # Export interface to DIA
-      if( $ir_node->kind() eq 'dk_Interface' ) {
-        export_to_dia($name, [$ir_node]);
-      }
-      elsif( $ir_node->kind() eq 'dk_Module' ) {
-        export_to_dia($name, $ir_node->contents('dk_Interface'));
-      }
-      return;
-    }
-    return 1 if CORBA::MICO::Misc::cursor_watch($ctree_window, 1);
-    if( $action == 2 ) {
-      # show inheritance
-      if( $ir_node->kind() eq 'dk_Interface' ) {
-        show_interface_tree($name, [$ir_node]);
-      }
-      elsif( $ir_node->kind() eq 'dk_Module' ) {
-        show_interface_tree($name, $ir_node->contents('dk_Interface'));
-      }
-    }
-    else {
-      # show IDL
-      CORBA::MICO::Hypertext::hypertext_show($text, $name,
-                                             \&hypertext_cb, \%ir_items);
-    }
-    CORBA::MICO::Misc::cursor_restore_to_default($ctree_window, 0);
-    return;
-  }
-}
-
-#--------------------------------------------------------------------
-# Enable/disable menu choices according to type of selected IR object
-#--------------------------------------------------------------------
-sub mask_menu {
-  my ($idl_ok, $inher_ok) = (0, 0);
-  if( defined($selected_node) ) {
-    my $ud = $ctree->node_get_row_data($selected_node);
-    my $ir_node = $ud->[0];
-    if( defined($ir_node) ) {
-      $idl_ok = 1;
-      my $kind = $ir_node->kind();
-      if( $kind eq 'dk_Interface' or $kind eq 'dk_Module') {
-        $inher_ok = 1;
-      }
-    }
-  }
-  my $idl_widget = $item_factory->get_widget_by_action(1);
-  my $inher_widget = $item_factory->get_widget_by_action(2);
-  my $dia_widget = $item_factory->get_widget_by_action(3);
-  $idl_widget->set_sensitive($idl_ok);
-  $inher_widget->set_sensitive($inher_ok);
-  $dia_widget->set_sensitive($inher_ok);
-}
-#--------------------------------------------------------------------
-
 $| = 1;
 Gtk->set_locale();
 POSIX::setlocale(LC_NUMERIC, 'POSIX');
 Gtk->init();
 
 # Create toplevel window
-$ctree_window = new Gtk::Window('toplevel');
-$ctree_window->signal_connect('destroy' , 
-                                \&destroy_exit, \$ctree_window, \$text);
-$ctree_window->signal_connect('delete_event', 
-                                \&destroy_exit, \$ctree_window, \$text);
-$ctree_window->set_title('Corba Control Center: Interface repository');
-$ctree_window->border_width(0);
-$ctree_window->realize();
+$topwindow = new Gtk::Window('toplevel');
+$topwindow->set_title('Corba Control Center: Interface repository');
+$topwindow->border_width(0);
+$topwindow->realize();
 
-# Vertical box: menu & pane
-my $vbox = new Gtk::VBox;
-$ctree_window->add($vbox);
+# create status line
+my $status_line = status_line_create();
 
-# Menu
-my $accel_group = new Gtk::AccelGroup;
-$item_factory = new Gtk::ItemFactory('Gtk::MenuBar', "<main>", $accel_group);
-$accel_group->attach($ctree_window);
-foreach my $entry (@item_factory_entries) {
-  $item_factory->create_item($entry, \&item_factory_activated);
-}
-mask_menu();
-$vbox->pack_start($item_factory->get_widget('<main>'), 0, 0, 0);
-
-# Create paned window: left-tree, right-text
-my $paned = new Gtk::HPaned;
-$vbox->pack_start($paned, 1, 1, 0);
-$vbox->show_all();
-
-# Create scrolled window for CTree
-my $scrolled = new Gtk::ScrolledWindow(undef,undef);
-$scrolled->set_policy( 'automatic', 'automatic' );
-$paned->add($scrolled);
-
-# Create ctree widget
-my @tree_titles = ();
-if( $#tree_titles >= 0 ) { 
-  $ctree = new_with_titles Gtk::CTree(0, @tree_titles);
-}
-else {
-  $ctree = new Gtk::CTree(1, 0);
-}
-#$ctree->set_line_style( 'dotted' );
-$ctree->set_column_auto_resize(0, 1);
-$scrolled->add($ctree);
-# Create text window for IDL-representation of selected items
-$text = CORBA::MICO::Hypertext::hypertext_create(1);
-$paned->add2($text);
-
-# Prepare pixmaps ($ctree_window should be realized to have defined GdkWindow')
-($book_open, $book_open_mask) = create_from_xpm_d Gtk::Gdk::Pixmap($ctree_window->window, undef, @book_open_xpm);
-($book_closed, $book_closed_mask) = create_from_xpm_d Gtk::Gdk::Pixmap($ctree_window->window, undef, @book_closed_xpm);
-($mini_page, $mini_page_mask) = create_from_xpm_d Gtk::Gdk::Pixmap($ctree_window->window, undef, @mini_page_xpm);
+# create menu
+my $menu = new CORBA::MICO::CMenu($topwindow);
+$menu->add_item('', '/File/_Quit',  '<control>Q', sub { Gtk->main_quit(); });
 
 # Initialize MICO, get IR
 my $orb = CORBA::ORB_init("mico-local-orb");
 my $root_poa = $orb->resolve_initial_references("RootPOA");
-my $root_node = $orb->resolve_initial_references("InterfaceRepository");
-$root_ir = new CORBA::MICO::IRRoot($root_node);
+my $root_ir = $orb->resolve_initial_references("InterfaceRepository");
+if( CORBA::is_nil($root_ir) ) {
+  print "Could not bind to Interface Repository\n";
+  exit(1);
+}
+if( not $orb->preload('IDL:omg.org/CORBA:1.0') ) {
+  print "Could not preload DL:omg.org/CORBA:1.0\n";
+  exit(1);
+}
 
-$paned->set_position(200);
-$scrolled->show();
-$paned->show();
-$ctree_window->show();
+my $root_nc;
+try {
+  $root_nc = $orb->resolve_initial_references("NameService");
+}
+catch CORBA::Exception with {
+  undef $root_nc;
+  warn "Could not bind to Name Service: $_[0]\n";
+};
 
-my @queue;
-my $parent = undef;
-my $contents = ir_contents($root_ir, 'dk_Module');
-add_contents_to_node($ctree, undef, undef, ['Modules'], $contents, \@queue);
-$contents = ir_contents($root_ir, 'dk_Interface');
-add_contents_to_node($ctree, undef, undef, ['Interfaces'], $contents, \@queue);
-$contents = ir_contents($root_ir, 'dk_Value', 'dk_ValueBox');
-add_contents_to_node($ctree, undef, undef, ['Values'], $contents, \@queue);
-$contents = ir_contents($root_ir, 
-                        'dk_Struct', 'dk_Union', 'dk_Enum', 'dk_Alias',
-                        'dk_String', 'dk_Wstring', 'dk_Fixed',
-                        'dk_Sequence', 'dk_Array', 
-                        'dk_Typedef', 'dk_Primitive', 'dk_Native', 
-                        'dk_Attribute', 'dk_ValueMember');
-add_contents_to_node($ctree, undef, undef, ['Types'], $contents, \@queue);
-$contents = ir_contents($root_ir, 'dk_Constant');
-add_contents_to_node($ctree, undef, undef, ['Constants'], $contents, \@queue);
-$ctree->show();
+if( defined($root_nc) ) {
+  my $nsmod = $root_ir->lookup_name('CosNaming', 1, 'dk_Module', 1);
+  if( @$nsmod == 0 ) {
+    warn "Name Service will not be supported so as module CosNaming was not found in IR\n";
+    undef $root_nc;
+  }
+}
 
-my $to_tag = Gtk->timeout_add(20, \&timeout_hnd, $ctree, \@queue);
-$ctree->signal_connect('destroy', sub { Gtk->timeout_remove($to_tag); 1; });
-$ctree->signal_connect('tree_select_row',   \&row_selected);
-$ctree->signal_connect('tree_unselect_row', \&row_unselected);
-$ctree->signal_connect('tree_expand', \&row_expanded, \@queue);
+# Create notebook
+my $notebook = new Gtk::Notebook();
+$notebook->show();
+
+# Vertical box: menu + notebook + status line
+my $vbox = new Gtk::VBox;
+$topwindow->add($vbox);
+$vbox->pack_start($menu->widget(), 0, 0, 0);
+$vbox->pack_start($notebook, 1, 1, 0);
+$vbox->pack_start($status_line, 0, 0, 0);
+$vbox->show_all();
+
+# create background queue scheduler
+$bg_sched = new CORBA::MICO::BGQueue(20);
+
+# create IR browser
+my $ir_browser = new CORBA::MICO::IR($root_ir, $topwindow,
+                                     $status_line, $bg_sched, $menu);
+# Create Label and add IR page to the notebook
+my $ir_bookmark_label = Gtk::Label->new("Interface Repository");
+$ir_bookmark_label->show();
+my $ir_widget = $ir_browser->widget();
+$notebook->append_page($ir_widget, $ir_bookmark_label);
+$notebook->signal_connect('switch-page', \&notebook_switch_page, $ir_browser);
+
+# create NC browser
+if( $root_nc ) {
+  my $nc_browser = new CORBA::MICO::NC($orb, $root_nc, $ir_browser, $topwindow, 
+                                       $status_line, $bg_sched, $menu);
+
+  # Create Label and add NS page to the notebook
+  my $nc_bookmark_label = Gtk::Label->new("Name Service");
+  $nc_bookmark_label->show();
+  my $nc_widget = $nc_browser->widget();
+  $notebook->append_page($nc_widget, $nc_bookmark_label);
+  $notebook->signal_connect('switch-page', \&notebook_switch_page, $nc_browser);
+}
+
+# add last item to menu
+$menu->add_item('', '/Help/_About', undef, sub {});
+
+# termination
+$topwindow->signal_connect('destroy' , 
+                                \&destroy_exit, \$topwindow, \$ir_browser);
+$topwindow->signal_connect('delete_event', 
+                                \&destroy_exit, \$topwindow, \$ir_browser);
+
+activate_object($notebook, $ir_browser, $notebook->page_num($ir_widget));
+
+$topwindow->show_all();
 Gtk->main();

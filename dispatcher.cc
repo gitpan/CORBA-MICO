@@ -27,14 +27,15 @@ PMicoDispatcherCallback::callback (CORBA::Dispatcher *dispatcher, CORBA::Dispatc
     case CORBA::Dispatcher::Except:
 	ev = "Write";
 	break;
-    case CORBA::Dispatcher::All:
-	ev = "All"; /* Should never get here? */
-	break;
     case CORBA::Dispatcher::Remove:
 	ev = "Remove";
 	break;
     case CORBA::Dispatcher::Moved:
 	ev = "Moved";
+	break;
+    case CORBA::Dispatcher::All:
+    default:
+	ev = "All"; /* Should never get here? */
 	break;
     }
     

@@ -210,13 +210,18 @@ ORB_init (id)
 	
 	    ARGV = perl_get_av("ARGV", FALSE);
 	    ARGV0 = perl_get_sv("0", FALSE);
+
+	    AV* ARGV_copy = newAV();
+	    sv_2mortal((SV*)ARGV_copy);
+	    for( i=0; i<=av_len(ARGV); i++)
+              av_store( ARGV_copy, i, newSVsv(*av_fetch(ARGV, i, 0)) );
 	
-	    argc = av_len(ARGV)+2;
+	    argc = av_len(ARGV_copy)+2;
 	    argv = (char **)malloc (sizeof(char *)*argc);
 	    argv[0] = SvPV (ARGV0, PL_na);
-	    for (i=0;i<=av_len(ARGV);i++)
-		argv[i+1] = SvPV(*av_fetch(ARGV, i, 0), PL_na);
-	
+	    for( i=0; i<=av_len(ARGV_copy); i++ )
+	      argv[i+1] = SvPV( *av_fetch(ARGV_copy, i, 0), PL_na );
+
 	    try {
 	      RETVAL = CORBA::ORB_init (argc, argv, id);
 	    } catch (CORBA::SystemException &ex) {
@@ -332,13 +337,15 @@ resolve_initial_references (self, id)
     char *     id
     CODE:
     {
-	CORBA::Object *obj = CORBA::OBJECT_NIL;
+	CORBA::Object *obj = 0;
 	try {
 	  obj = self->resolve_initial_references (id);
 	} catch (CORBA::SystemException &ex) {
 	    pmico_throw (pmico_system_except (ex._repoid (),
 					      ex.minor (),
 					      ex.completed ()));
+	} catch (CORBA::ORB_InvalidName &ex) {
+	    pmico_throw (pmico_builtin_except (&ex));
 	}
 	if( strcmp( id, "DynAnyFactory" ) == 0 ) {
 	  DynamicAny::DynAnyFactory_ptr dafact = DynamicAny::DynAnyFactory::_narrow(obj);
@@ -436,6 +443,59 @@ _get_interface (self)
     }
     OUTPUT:
     RETVAL
+
+int
+_non_existent (self)
+    CORBA::Object self;
+    CODE:
+		RETVAL = self->_non_existent();
+    OUTPUT:
+    RETVAL
+
+int
+_is_a (self, repoId)
+    CORBA::Object self;
+    char * repoId;
+    CODE:
+		try {
+    	RETVAL = self->_is_a(repoId);
+    } catch (CORBA::SystemException &ex) {
+			pmico_throw (pmico_system_except(ex->_repoid(),
+									 ex->minor(),
+									 ex->completed()));
+    }
+    OUTPUT:
+    RETVAL
+
+int
+_is_equivalent (self, obj)
+    CORBA::Object self;
+		CORBA::Object obj;
+		CODE:
+    try {
+      RETVAL = self->_is_equivalent((CORBA::Object_ptr)obj);
+		} catch (CORBA::SystemException &ex) {
+			pmico_throw (pmico_system_except(ex->_repoid(),
+									 ex->minor(),
+									 ex->completed()));
+		}
+		OUTPUT:
+		RETVAL
+
+unsigned long
+_hash (self, maximum)
+    CORBA::Object self;
+		unsigned long maximum;
+		CODE:
+		try {
+    	RETVAL = self->_hash(maximum);
+    } catch (CORBA::SystemException &ex) {
+			pmico_throw (pmico_system_except(ex->_repoid(),
+									 ex->minor(),
+									 ex->completed()));
+    }
+    OUTPUT:
+		RETVAL
 
 char *
 _repoid (self)
@@ -1302,6 +1362,31 @@ PortableServer::POAManager::deactivate (etherealize_objects, wait_for_completion
     } catch (PortableServer::POAManager::AdapterInactive &ex) {
 	pmico_throw (pmico_builtin_except (&ex));
     }
+
+char *
+PortableServer::POAManager::get_state ()
+    CODE:
+		PortableServer::POAManager::State state;
+		state = THIS->get_state();
+		switch (state) {
+			case PortableServer::POAManager::HOLDING:
+				RETVAL = "HOLDING";
+				break;
+
+			case PortableServer::POAManager::ACTIVE:
+				RETVAL = "ACTIVE";
+				break;
+
+			case PortableServer::POAManager::DISCARDING:
+				RETVAL = "DISCARDING";
+				break;
+
+			case PortableServer::POAManager::INACTIVE:
+				RETVAL = "INACTIVE";
+				break;
+		}
+		OUTPUT:
+		RETVAL
 
 void
 PortableServer::POAManager::DESTROY ()

@@ -403,8 +403,8 @@ PMicoAdapterActivator::unknown_adapter (PortableServer::POA_ptr parent,
 
     if (exception)
 	throw exception;
-    else
-	return retval;
+
+    return retval;
 }
 
 PortableServer::Servant
@@ -448,8 +448,8 @@ PMicoServantActivator::incarnate (const PortableServer::ObjectId& oid,
 
     if (exception)
 	throw exception;
-    else
-	return retval;
+
+    return retval;
 }
 
 void
@@ -535,8 +535,8 @@ PMicoServantLocator::preinvoke (const PortableServer::ObjectId& oid,
 
     if (exception)
 	throw exception;
-    else
-	return retval;
+
+    return retval;
 }
 
 void
@@ -811,6 +811,7 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 	sp -= return_items;
 	PUTBACK;
     
+	int stack_index;
 	if (return_type != NULL) {
 	    CORBA::Any *res = new CORBA::Any;
 	    res->set_type (return_type);
@@ -822,9 +823,11 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 								       0, CORBA::COMPLETED_YES));
 		goto out;
 	    }
+	    stack_index = 2;
+	} else {
+	    stack_index = 1;
 	}
     
-	int stack_index = 2;
 	int inout_index = 0;
 	for (CORBA::ULong i=0; i<args->count(); i++) {
 	    CORBA::Flags dir = args->item(i)->flags();

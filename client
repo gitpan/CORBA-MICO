@@ -74,7 +74,7 @@ print "2 * 1,000,000,000,0000 pennies = ",
 print "Withdrawing \$100,000\n";
 try {
     $account->withdraw (100_000);
-} catch Account::Account::InsufficientFunds with {
+} catch Bank::Account::InsufficientFunds with {
     my $e = shift;
     print STDERR "Oops. I don't have that much money\n";
     print STDERR "    (I need $e->{overdraft} more)\n";
@@ -136,8 +136,8 @@ try {
   {
     my $lval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:CORBA/Long:1.0'),   18 );
     my $sval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:CORBA/String:1.0'), "eightteen" );
-    my $fval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:Account/Amount:1.0'),  "18.08" );
-    my $enval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:Account/Account/da_enum:1.0'), "da_enum_3" );
+    my $fval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:Bank/Amount:1.0'),  "18.08" );
+    my $enval_any = new CORBA::Any (CORBA::TypeCode->new('IDL:Bank/Account/da_enum:1.0'), "da_enum_3" );
     $da_struct->set_members( 
     [
       { id => 'lval', value => $lval_any },

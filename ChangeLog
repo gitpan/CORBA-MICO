@@ -1,3 +1,121 @@
+2001-10-22 18:33  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm: Up version to 0.6.4
+
+2001-10-22 18:30  Nikolay Logvinov <logvinon@mail.ru>
+
+	* README: more actual README
+
+2001-10-17 16:37  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: IR.pm, NC.pm, NCEntry.pm, ccc: Name Service: show IORs
+
+2001-10-12 16:17  Arun Kumar U <bksys@vsnl.com>
+
+	* examples/states: Example to test various POA States
+
+2001-10-12 16:11  Arun Kumar U <bksys@vsnl.com>
+
+	* MICO.xs: Added get_state() method for the POAManager interface
+
+2001-10-11 17:24  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/IR.pm: Support abstract interfaces for MICO version 2.3.6 and
+	higher
+
+2001-10-11 17:01  Arun Kumar U <bksys@vsnl.com>
+
+	* examples/objecttest: Example to exercise the methods in
+	CORBA::Object
+
+2001-10-11 17:00  Arun Kumar U <bksys@vsnl.com>
+
+	* examples/pingo: Object Pinger Example
+
+2001-10-11 16:52  Arun Kumar U <bksys@vsnl.com>
+
+	* MICO.xs: Added the following methods supported by CORBA::Object
+	pseudo interface: _non_existent(), _is_a(), _hash() and
+	_is_equivalent()
+
+2001-10-10 17:59  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/ccc: Catch CORBA exception when connect to Name Service
+
+2001-10-10 17:31  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: IR.pm, NC.pm: Name Service browser: interface inheritance
+	tree, export to DIA
+
+2001-10-10 17:12  Nikolay Logvinov <logvinon@mail.ru>
+
+	* dispatcher.cc, errors.cc, gtkmico.h, server.cc: compiler
+	complainigs
+
+2001-10-10 17:10  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: IR.pm, NC.pm, ccc: Name Service browser: IDL representation
+	of object's interfaces
+
+2001-10-10 12:48  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: CMenu.pm, IR.pm, IRRoot.pm, Misc.pm, NC.pm, README, ccc:
+	Global menu object Global queue for background processing
+
+2001-10-09 18:13  Nikolay Logvinov <logvinon@mail.ru>
+
+	* developers: new developer - Arun Kumar U
+
+2001-10-09 18:10  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MANIFEST, client-activate: try to forget about BOA
+
+2001-10-09 17:22  Arun Kumar U <bksys@vsnl.com>
+
+	* client, server: Necessary updations for the revised IDL (module
+	name changed to Bank)
+
+2001-10-09 17:20  Arun Kumar U <bksys@vsnl.com>
+
+	* MICO.xs: Undefined Symbols fixed (MICO 2.3.6 compatibility fix)
+
+2001-10-09 17:18  Arun Kumar U <bksys@vsnl.com>
+
+	* Account.idl: module name changed from 'Account' to 'Bank'.
+	Required by the new IDL Compiler (MICO ver 2.3.6)
+
+2001-10-08 19:24  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: fixed command line arguments corruption, reported by 
+	Arun Kumar U <bksys@vsnl.com>
+
+2001-10-08 13:47  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: BGQueue.pm, IR.pm, IRRoot.pm, Misc.pm, NC.pm, NCEntry.pm,
+	NCRoot.pm, ccc: Name service browser
+
+2001-10-08 12:22  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/plans.txt: plans.txt added
+
+2001-10-05 16:07  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/ccc: Compatibility with versions of perl under 5.6.0
+
+2001-10-05 14:12  Nikolay Logvinov <logvinon@mail.ru>
+
+	* server.cc: fixed call of server method with void return and out
+	arguments, reported by Arun Kumar U <bksys@vsnl.com>
+
+2001-09-27 11:36  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, errors.cc: use and catch MICO UserExceptions, see
+	orb_except.idl
+
+2001-09-20 11:43  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/: Misc.pm, ccc: Status line added
+
 2001-09-07 16:57  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, README: Up version to 0.6.3
@@ -14,6 +132,10 @@
 2001-09-04 11:31  Pavel Rousnak <rousnak@users.sourceforge.net>
 
 	* ccc/Makefile.PL: 'PREREQ_PM' - required modules/versions added
+
+2001-09-03 13:16  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ir-browser/: README, TCUtils.pm, browser: Removed, CCC added
 
 2001-09-03 13:06  Pavel Rousnak <rousnak@users.sourceforge.net>
 
@@ -181,9 +303,10 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
-	shlib/perl-client, shlib/server.cc, mico/ir.idl, mico/ir_base.idl:
-	Initial revision
+	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
+	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
+	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
+	mico/ir_base.idl: Initial revision
 
 1999-06-13 18:35  Owen Taylor  <otaylor@redhat.com>
 
@@ -196,7 +319,8 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
-	shlib/perl-client, shlib/server.cc, mico/ir.idl, mico/ir_base.idl:
-	Initial import of Perl bindings for MICO
+	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
+	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
+	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
+	mico/ir_base.idl: Initial import of Perl bindings for MICO
 

@@ -186,6 +186,15 @@ static BuiltinExceptionRec builtin_exceptions[] = {
     { "IDL:omg.org/DynamicAny/DynAnyFactory/InconsistentTypeCode:1.0",
       "DynamicAny::DynAnyFactory::InconsistentTypeCode",
       (PMicoBuiltinException)0 },
+    { "IDL:omg.org/CORBA/ORB/InvalidName:1.0",
+      "CORBA::ORB::InvalidName",
+      (PMicoBuiltinException)0 },
+    { "DL:omg.org/CORBA/TypeCode/InvalidName:1.0",
+      "CORBA::TypeCode::InvalidName",
+      (PMicoBuiltinException)0 },
+    { "IDL:omg.org/CORBA/TypeCode/BadKind:1.0",
+      "CORBA::TypeCode::InvalidName",
+      (PMicoBuiltinException)0 },
 };
 
 static const int num_builtin_exceptions =
@@ -323,6 +332,8 @@ pmico_system_except (const char *repoid, CORBA::ULong minor,
     case CORBA::COMPLETED_MAYBE:
         status_str = "COMPLETED_MAYBE";
 	break;
+    default:
+	status_str = "unknown_COMPLETED_status";
     }
     XPUSHs(sv_2mortal(newSVpv(status_str, 0)));
     

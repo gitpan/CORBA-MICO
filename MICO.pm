@@ -14,7 +14,7 @@ require CORBA::MICO::LongDouble;
 
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.6.3';
+$VERSION = '0.6.4';
 
 bootstrap CORBA::MICO $VERSION;
 

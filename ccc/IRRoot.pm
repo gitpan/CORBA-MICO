@@ -43,8 +43,13 @@ sub store_entry {
 
 #--------------------------------------------------------------------
 sub contents {
-  my ($self, $kind) = @_;
-  return $self->entry('')->contents($kind);
+  my ($self, $kind, $flag) = @_;
+  return $self->entry('')->contents($kind, $flag);
+}
+
+#--------------------------------------------------------------------
+sub kind {
+  my $self = shift;
 }
 
 #--------------------------------------------------------------------
@@ -57,7 +62,8 @@ sub _entry {
 #--------------------------------------------------------------------
 sub _entry_by_id {
   my ($self, $repoid) = @_;
-  my $node = $self->{'ROOT'}->lookup_id($repoid) or return undef;
+  my $node = $self->{'ROOT'}->lookup_id($repoid);
+  return undef unless $node;
   return $self->store_entry($node->_get_absolute_name, $repoid, $node);
 }
 

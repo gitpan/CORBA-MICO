@@ -84,4 +84,4 @@ public:
     virtual CORBA::Boolean idle () const;
 };
 
-#endif __mico_gtk_h__
+#endif /* __mico_gtk_h__ */
