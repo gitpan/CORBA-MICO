@@ -1,0 +1,16 @@
+- Check results of all calls to pmico_to_any, provide useful
+  error messages.
+
+- Cache results in hash table when looking up descriptions on the
+  server side to avoid tons of strcmp's.
+
+- Implement constants. (Probably use newCONSTSUB from IO.xs)
+  This also means generalizing loading (preload()) to load
+  not just interfaces but general containers)
+
+- Set up Typecode constants for loaded interfaces/modules.
+
+- Fill in member functions for TypeCode
+
+- Globally remove all the damn (char *) casts when passing const
+  char *'s into Perl functions and do something better.

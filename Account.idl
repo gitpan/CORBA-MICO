@@ -1,0 +1,41 @@
+module Account {
+
+  interface AcctCounter {
+    long next();
+    void destroy();
+  };
+
+  interface Account {
+    exception InsufficientFunds { long overdraft; };
+    
+    typedef sequence<short> numbers;
+
+    enum Color {
+      taupe, burgundy, chartreuse
+    };
+    struct Preferences {
+      Color favorite_color;
+      numbers lottery_numbers;
+    };
+
+    enum PrefType {
+      pt_color, pt_lotnum
+    };
+
+    union Preference switch (PrefType) {
+      case pt_color: Color favorite_color;
+      case pt_lotnum: numbers lottery_numbers;
+    };
+    
+    attribute Preferences prefs;
+
+    void set_pref ( in Preference p );
+    Preference get_pref ( in PrefType t );
+    any get_pref_any ( in PrefType t );
+
+    void deposit( in unsigned long amount );
+    void withdraw( in unsigned long amount ) raises (InsufficientFunds);
+    long balance();
+    AcctCounter counter();
+  };
+};

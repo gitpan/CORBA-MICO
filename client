@@ -1,0 +1,62 @@
+#!/usr/bin/perl -w
+
+use CORBA::MICO;
+use Error qw(:try);
+
+use strict;
+
+my $orb = CORBA::ORB_init("mico-local-orb");
+my $boa = $orb->BOA_init("mico-local-boa");
+
+open IOR, "account.ref";
+my $ior = <IOR>;
+close IOR;
+
+my $account = $orb->string_to_object($ior);
+
+$account->_set_prefs ( { favorite_color => 'taupe',
+		         lottery_numbers => [ 21, 63, 83, 96 ]} );
+
+for (my $i=0;$i<0;$i++) {
+    $account->deposit( 1 );
+}
+$account->deposit( 100 );
+$account->deposit( 100 );
+$account->deposit( 100 );
+$account->deposit( 100 );
+$account->deposit( 100 );
+$account->withdraw( 240 );
+$account->withdraw( 10 );
+
+print "Balance is ".$account->balance."\n";
+
+my $prefs = $account->_get_prefs;
+print "Favorite color is ",$prefs->{favorite_color},"\n";
+print "Lottery numbers are ",
+    join(" ", @{$prefs->{lottery_numbers}}),"\n";
+$account->set_pref ( [ 'pt_color', 'chartreuse', ] );
+
+print "Favorite color is now ",$account->get_pref('pt_color')->[1],"\n";
+print "As an any: favorite color is now ",
+          $account->get_pref_any('pt_color')->value,"\n";
+
+print "Withdrawing \$100,000\n";
+try {
+    $account->withdraw (100_000);
+} catch Account::Account::InsufficientFunds with {
+    my $e = shift;
+    print STDERR "Oops. I don't have that much money\n";
+    print STDERR "    (I need $e->{overdraft} more)\n";
+}
+
+my $counter = $account->counter();
+print join(" ", map { $counter->next } (1..10)), "\n";
+
+$counter->destroy();
+try {
+    $counter->next;
+} catch CORBA::Exception with {
+    print "Caught $_[0], while counting with a destroyed counter\n";
+};
+
+print "Successful completion\n"

@@ -1,0 +1,124 @@
+MICO-0.1
+========
+
+Perl Interface to MICO (Mico Is COrba) version 0.1.
+
+
+Status
+======
+
+Basic client and server functionality is currently working.
+Quite a few things are left to be done. A few of them are:
+
+ - Arrays
+ - Constants
+ - Activation modes other than Persistant
+
+None of these are particularly hard to do given what works
+now - they just haven't been done yet.
+
+
+Documentation
+=============
+
+General information about a mapping of CORBA onto Perl is in
+the available in the file 'MICO/mapping.pod' while specifics
+about MICO are in 'MICO.pm'. Information about the internals
+of the module is in 'MICO/internals.pod' These POD documents
+can be viewed on the screen using the 'perldoc' program:
+
+  perldoc MICO/mapping.pod
+
+or converted to a variety of formats, for example:
+
+  pod2html MICO/mapping.pod > MICO/mapping.html
+
+They will also be installed as manual pages.
+
+The file MICO/internals.ps is a diagram that may be useful
+for figuring out MICO/internals.pod.
+
+
+Installation
+============
+
+To compile and run this package, you'll need to have
+MICO installed. Information about MICO is availaible
+from:
+
+   http://diamant-atm.vsb.cs.uni-frankfurt.de/~mico/
+
+You'll also need Graham Barr's Error module (available
+from CPAN in the directory:
+
+   http://www.perl.com/CPAN/authors/id/GBARR/
+
+) and a reasonable recent version of Perl. (This is only been
+tested with perl-5.004_58, but it should work with the
+stable perl-5.004_04 as well, and probably even earlier versions).
+
+Once you have MICO installed, to build this package, first
+edit Makefile.PL, if necessary. The only thing that will
+probably need to be changed is the line:
+
+    'LIBS'	=> ['-lmico2.0.2 -lstdc++'],   
+
+Change -lmico2.0.2 to reflect whatever version you have 
+installed. (This problem wouldn't occur if MICO set
+up the correct symbolic links when installed)
+
+Then simply type:
+
+  perl Makefile.PL
+  make
+
+The package then can be installed by executing the command:
+
+  make install
+
+
+
+Trying it Out
+=============
+
+To start the interface repository, load in the Account.idl
+interface file, and create an appropriate .micorc, run
+the script
+
+  ./start-servers.sh
+
+Run the Perl server program in the background:
+
+  perl -Mblib server &
+
+And then run the client program:
+
+  perl -Mblib client
+
+You should see output that looks something like:
+
+--------
+Balance is 500
+Favorite color is taupe
+Lottery numbers are 21 63 83 96
+Favorite color is now chartreuse
+As an any: favorite color is now chartreuse
+Withdrawing $100,000
+Oops. I don't have that much money
+    (I need 99500 more)
+1 2 3 4 5 6 7 8 9 10
+Caught Exception: CORBA::OBJECT_NOT_EXIST ('IDL:omg.org/CORBA/OBJECT_NOT_EXIST:1.0')
+    (0, COMPLETED_NO)
+   Non-existent object, delete reference, while counting with a destroyed counter
+Successful completion
+----------
+
+
+=================
+
+License
+-------
+
+This work is Copyright Owen Taylor, 1998, and licensed
+under the terms of the GNU Library General Public License (LGPL)
+See the included file for details.

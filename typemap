@@ -1,0 +1,16 @@
+TYPEMAP
+CORBA::Any	T_PTROBJ
+CORBA::ORB	T_PTROBJ
+CORBA::BOA	T_PTROBJ
+CORBA::Object	T_MICOOBJ
+CORBA::TypeCode	T_PTROBJ
+
+######################################################################
+INPUT
+T_MICOOBJ
+	$var = pmico_sv_to_obj ($arg)
+
+######################################################################
+OUTPUT
+T_MICOOBJ
+	$arg = pmico_find_or_create ($var);

@@ -1,0 +1,255 @@
+=head1 NAME
+
+MICO::mapping - CORBA mapping for Perl
+
+=head1 DESCRIPTION
+
+This document describes a  mapping of the CORBA system into Perl.
+It sticks most closely to the mapping in the L<MICO> module,
+however some reference is also made to the mappings implemented
+in L<COPE> and ILU/Perl.
+
+These systems exhibit a wide diversity in the details of their
+object adaptors. MICO implements the BOA in a comprehensive
+fashion, including all activation modes, COPE implements
+a simpler version of the BOA, and ILU has its own object
+native adaptor different from the BOA, though it implements
+some of the BOA specificatoin through compatibility classes.
+Future Perl CORBA products will presumably implement the
+new POA standard.
+
+For this reason, this document largely avoids specifying object
+adaptor details, except for a few specific notes. Details
+about the manner in which the ORB is initialized and interface
+definitions are loaded are also not specified here. Conformant
+implementations may either use conventional stubs or access
+interface definitions in a dynamic manner. (For instance, by loading them
+from an Interface Repository.)
+
+The design goal for this mapping was to allow applications to access
+the complete CORBA specification to be accessed from Perl in a
+convenient and concise manner, even when this requires sacrificing
+some amount of speed or convenience for the ORB implementor.
+
+=head1 Scoped Names
+
+Names in Perl are identical to those in CORBA IDL. For instance,
+an interface C<Foo> defined module C<M>, is mapped into the
+Perl package C<Foo::M>. 
+
+It should be noted however that Perl package names do not 
+constitute nested scopes. That is, within the package C<Foo::M1>,
+the package C<Foo::M1::M2> cannot be referred to as C<M2>, but
+must be specified by the fully qualified name C<Foo::M1::M2>.
+
+=head1 Mapping for Basic Types
+
+Unsigned C<short>, C<long>, C<float>, C<double>, and C<octet> all
+map to Perl scalar variables. C<char> maps to a string of length 1. 
+C<boolean> map as expected for Perl. That is, a CORBA C<boolean>
+maps to "" if false and to 1 if true. A Perl scalar maps to
+CORBA::TRUE if it is true, and CORBA::FALSE otherwise.
+
+=head1 Mapping for constructed types
+
+=over 4
+
+=item Structures
+
+A structure maps to a has reference with keys which are the
+names of the members.
+
+That is:
+
+  struct S {
+     short a;
+     string b;
+  };
+
+maps to the hash reference:
+
+  {
+     a => 42,
+     b => "some string"
+  }
+
+
+=item Enumerations
+
+Enumerations map to strings corresponding to the names of 
+the members.
+
+=item Sequences
+
+Sequences of C<octet> and C<char> map to Perl strings. Other
+sequences map to array references.
+
+=item Arrays
+
+=item Anys
+
+An any maps to a Perl object of type CORBA::Any. The constructor
+takes two arguments, the type (of type CORBA::TypeCode) and
+the value. The type and value are accessed via the type() and
+value() member functions.
+
+=item Unions
+
+A union maps into a two element array reference. The first
+element is the discriminator, the second, value of the arm selected
+by that discriminator. If the discriminator does not match
+one of the arms of the union, and their is no default arm, the
+second element will be an undefined value.
+
+=head1 Constants
+
+Constants defined in IDL map to a Perl subroutine which returns
+the value of the constant.
+
+=head1 Objects
+
+CORBA objects are mapped into normal Perl objects. The extra
+information used by MICO is stored in magic attached to the
+variable, so it does not matter which type of reference the
+object is. On the client side, stub objects are blessed hash 
+references, which could conceivably be useful information. But
+it could also change. On the server side, the choice of type
+is completely up to the implementor.
+
+Interface are implemented by deriving from the package corresponding
+to the interface. 
+
+  package MyAccount;
+
+  @MyAccount::ISA = qw(Bank::Account);
+  
+  sub new {
+    my $self = bless {
+		      current_balance => 0
+		     };
+  }
+
+An object reference for the object will be created when required.
+That is, when the object is marshalled as the argument or return
+value from a call, or when an API operation that requires 
+
+
+When it is not clear from inheritance what interface the object
+implements, the method C<_set_repoid()> can be used to specify this
+specifically.This typically comes up when there is implementation
+inheritance which parallels the interface inheritance
+
+For instance, when implementing the following IDL:
+
+  module Foo {
+     interface A { long foo(); };
+     interface B : A { long bar(); }
+  }
+
+with the following Perl code;
+
+  package MyA;
+
+  @MyA::ISA = qw(Foo::A);
+ 
+  sub foo {
+      return 1;
+  }  
+
+  package MyB;
+
+  @MyA::ISA = qw(MyA Foo::B);
+ 
+  sub bar {
+     return 2;
+  } 
+
+  sub new {
+     my $self = bless {};
+     $self->_set_repoid('IDL:Foo/B:1.0');
+  }
+
+The ID must explicitely be given so that it can be determined
+that C<Foo::B> is being implemented, not C<Foo::A>. Note that
+C<MyA> must come first in C<MyB>'s C<@ISA> so that MyA::foo
+will be found before the default stub for Foo::A. 
+
+C<_set_repoid> must be called before an object reference 
+is created for the servant.
+
+=head2 Attributes
+
+Attributes are mapped to a pair of methods with names which are the
+attribute name prepended with C<_set_> and C<_get_>.  The C<_set_>
+method (not present for C<readonly> attributes)  takes a single
+parameter of the type of the attribute. The C<_get_> method returns
+a value of the type of the attribute.
+
+=head2 Operations
+
+Operations are mapped to method calls. C<in> parameters are
+mapped to parameters normally, C<inout> parameters get an
+extra reference, and C<out> parameters are returned as part
+of a list.
+
+For instance, the operation:
+
+   char foo(in long l, inout string b, out float f);
+
+would be called as:
+
+   ($c,$f) = $obj->foo($l, \$s);
+
+=head2 A note on the POA
+
+The above mapping tries to blur the distinction between the servant,
+and the object reference that it incarnates as much as possible. Perl
+code uses the same object for both operations.  (The object reference
+is attached in some opaque way to to the servant object, and is
+retrieved as needed). This keeps simple tasks simple, and is
+completely sufficient when there is a one-to-one correspondence
+between the servant and object reference.
+
+However, the POA allows for more complicated situations where
+a single servant may incarnate multiple object references.
+Supplying a servant object where an object reference is needed
+is then only acceptable when there is a unique object reference
+for that servant. In other words, if it would be an error
+to call the _this() method of the servant, it is also an error
+to use the object as an object reference.
+
+Clearly, a Perl interface to an ORB supporting POA modes where
+multiple object references are incarnated by a single Perl object
+cannot completely short circuit the ORB when calls are made from
+Perl, on these object references, as can be done when there
+is a one-to-one correspondence between object reference and servant.
+In such circumstances, some sort of forwarding mechanism will
+be used.
+
+=head1 Exceptions 
+
+Exceptions are implemented using the Error module by Graham Barr.
+To throw an exception, use the C<throw> method in the Exception
+package:
+
+  throw MyInterface::MyException field1 => 'red', field2 => 32;
+
+To catch an exception, use a C<try...catch> statement.
+
+  try {
+     $foo->runit();
+  } catch MyInterface::MyException with {
+     $e = shift;
+     print "Caught a $e->{field1} exception";
+  }
+
+
+=head1 AUTHOR
+
+Owen Taylor <owt1@cornell.edu>
+
+=head1 SEE ALSO
+
+perl(1).
+
+=cut
