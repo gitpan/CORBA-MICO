@@ -191,6 +191,7 @@ pmico_encode_exception (const char *               name,
     XPUSHs (perl_except);
     PUTBACK;
 
+    CM_DEBUG(("pmico_encode_exception(name='%s')\n",name));
     int count = perl_call_method("_repoid", G_SCALAR | G_EVAL);
     SPAGAIN;
     
@@ -206,8 +207,10 @@ pmico_encode_exception (const char *               name,
 
     char *repoid = POPp;
     PUTBACK;
+    CM_DEBUG(("pmico_encode_exception():repoid='%s'\n",repoid));
 
     if (sv_derived_from (perl_except, "CORBA::SystemException")) {
+        CM_DEBUG(("pmico_encode_exception():repoid='%s' CORBA::SystemException\n",repoid));
 
 	SV **svp;
 
@@ -246,9 +249,11 @@ pmico_encode_exception (const char *               name,
 	return CORBA::SystemException::_create_sysex(repoid, minor, status);
 	
     } else if (sv_derived_from (perl_except, "CORBA::UserException")) {
+        CM_DEBUG(("pmico_encode_exception():repoid='%s' CORBA::UserException\n",repoid));
 	
 	if (exceptions) {
 	    for (CORBA::ULong i=0; i<exceptions->length(); i++) {
+                CM_DEBUG(("pmico_encode_exception():repoid='%s' is '%s'\n",repoid,(*exceptions)[i].id.in()));
 		if (!strcmp ((*exceptions)[i].id, repoid)) {
 		    
 		    CORBA::Any *any = new CORBA::Any;
@@ -491,7 +496,7 @@ PMicoServantActivator::etherealize (const PortableServer::ObjectId& oid,
 
 PortableServer::Servant
 PMicoServantLocator::preinvoke (const PortableServer::ObjectId& oid,
-				const PortableServer::POA_ptr   adapter,
+				PortableServer::POA_ptr   adapter,
 				const char *                    operation,
 				PortableServer::ServantLocator::Cookie& the_cookie)
 {
@@ -541,7 +546,7 @@ PMicoServantLocator::preinvoke (const PortableServer::ObjectId& oid,
 
 void
 PMicoServantLocator::postinvoke (const PortableServer::ObjectId& oid,
- 				 const PortableServer::POA_ptr   adapter,
+ 				 PortableServer::POA_ptr   adapter,
 				 const char *                    operation,
 				 PortableServer::ServantLocator::Cookie the_cookie,
 				 PortableServer::Servant         serv)
@@ -607,11 +612,12 @@ CORBA::OperationDescription *
 PMicoServant::find_operation (CORBA::InterfaceDef::FullInterfaceDescription *d,
 			      const char *name) 
 {
-    for (CORBA::ULong i=0; i<d->operations.length(); i++) {
+    CORBA::ULong i;
+    for ( i = 0; i<d->operations.length(); i++) {
 	if (!strcmp (name, d->operations[i].name))
 	    return &d->operations[i];
     }
-    for ( CORBA::ULong i = 0 ; i < d->base_interfaces.length() ; i++) {
+    for ( i = 0 ; i < d->base_interfaces.length() ; i++) {
         PMicoIfaceInfo *info = pmico_find_interface_description(d->base_interfaces[i]);
 	if (info) {
 	    CORBA::OperationDescription *res = find_operation(info->desc, name);
@@ -627,13 +633,14 @@ CORBA::AttributeDescription *
 PMicoServant::find_attribute (CORBA::InterfaceDef::FullInterfaceDescription *d,
 				 const char *name, bool set) 
 {
-    for (CORBA::ULong i=0; i<d->attributes.length(); i++) {
+    CORBA::ULong i;
+    for ( i = 0; i<d->attributes.length(); i++) {
 	if (!strcmp (name, d->attributes[i].name)) {
 	    if (!set || d->attributes[i].mode != CORBA::ATTR_READONLY)
 		return &d->attributes[i];
 	}
     }
-    for ( CORBA::ULong i = 0 ; i < d->base_interfaces.length() ; i++) {
+    for ( i = 0; i < d->base_interfaces.length() ; i++) {
         PMicoIfaceInfo *info = pmico_find_interface_description(d->base_interfaces[i]);
 	if (info)
 	    {
@@ -802,9 +809,13 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 						     return_items,
 						     exceptions);
 
-    if (exception)
+    if (exception) {
+        CORBA::UnknownUserException *uuex = CORBA::UnknownUserException::_downcast(exception);
+        CM_DEBUG(("PMicoServant::invoke():exception->_repoid()='%s'\n",exception->_repoid()));
+	if( uuex )
+	  CM_DEBUG(("PMicoServant::invoke():exception->_except_repoid()='%s'\n",uuex->_except_repoid()));
 	_req->exception (exception);
-    else {
+    } else {
 	/* The call succeeded -- decode the results */
 
 	SPAGAIN;

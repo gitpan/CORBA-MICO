@@ -95,10 +95,12 @@ if( CORBA::is_nil($root_ir) ) {
   print "Could not bind to Interface Repository\n";
   exit(1);
 }
-if( not $orb->preload('IDL:omg.org/CORBA:1.0') ) {
-  print "Could not preload DL:omg.org/CORBA:1.0\n";
-  exit(1);
-}
+
+eval { $orb->preload('IDL:omg.org/CORBA:1.0'); };
+if( $@ ) {
+  require Carp;
+  Carp::carp("Could not preload 'IDL:omg.org/CORBA:1.0'");
+} 
 
 my $root_nc;
 try {

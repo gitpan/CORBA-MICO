@@ -16,6 +16,8 @@ MICO/mapping.pod
 Makefile.PL
 Performance
 README
+README.win32
+CONFIG.win32
 TODO
 Tictactoe.idl
 client
@@ -46,8 +48,6 @@ start-servers.sh
 tictactoe
 typemap
 types.cc
-mico/ir_base.idl
-mico/ir.idl
 ccc/BGQueue.pm
 ccc/CMenu.pm
 ccc/Hypertext.pm
@@ -63,9 +63,7 @@ ccc/NCRoot.pm
 ccc/Pixtree.pm
 ccc/README
 ccc/ccc
-ccc/Makefile
 ccc/plans.txt
-mico-2.2.7-checker.patch
 examples/objecttest
 examples/pingo
 examples/states

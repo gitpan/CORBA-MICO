@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-use CORBA::MICO;
+use CORBA::MICO ids => [ 'IDL:Bank:1.0' => undef ];
 use Error qw(:try);
 
 use strict;
@@ -8,8 +8,14 @@ use strict;
 my $orb = CORBA::ORB_init("mico-local-orb");
 my ($ids,$id);
 $ids = $orb->list_initial_services();
+print "initial services:\n";
 foreach $id (@{$ids}) {
-  print "$id\n";
+  print "\t$id\n";
+}
+my $ir = $orb->resolve_initial_references("InterfaceRepository");
+if( CORBA::is_nil($ir) ) {
+  print "Can't connect to InterfaceRepository service\n";
+  exit 1;
 }
 
 open IOR, "account.ref";
@@ -66,6 +72,10 @@ print "As an any: favorite color is now ",
 print "As an any: nickname is now ",
           $account->get_pref_any('pt_nickname')->value,
 	  "(", $account->get_pref_any('pt_nickname')->type->kind,")","\n";
+my $ln = $account->get_pref_any('pt_lotnum')->value;
+print "As an any: lottery_numbers are now ",
+	  join(" ", @{$ln}),
+	  "(", $account->get_pref_any('pt_lotnum')->type->kind,")","\n";
 
 print "2 * 1,000,000,000,0000 pennies = ", 
     $account->add ('1 000 000 000 000', '1 000 000 000 000'),

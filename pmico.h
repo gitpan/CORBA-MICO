@@ -63,7 +63,7 @@ SV *              pmico_user_except     (const char *repoid, SV *value);
 // are catching internally
 SV *              pmico_builtin_except (CORBA::Exception *ex);
 // Throw a user exception object as a Perl exception
-void              pmico_throw           (SV *e);
+void              pmico_throw           (SV *e) __attribute__((noreturn));
 
 // Create an exception object for an exception thrown by the POA
 
@@ -105,3 +105,10 @@ SV *              pmico_any_to_sv        (CORBA::Any *any);
 SV *		  pmico_dyn_any_to_sv	 (DynamicAny::DynAny *dynany);
 // Convert CORBA::TCKind to string representation
 const char* const TCKind_to_str( CORBA::TCKind kind );
+
+//-------------------------------------------------------------------
+#ifdef CORBAMICO_DEBUG
+#define CM_DEBUG(v)	printf v
+#else
+#define CM_DEBUG(v)
+#endif

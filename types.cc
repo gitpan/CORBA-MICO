@@ -14,6 +14,7 @@ static HV *pin_table = 0;
 SV *
 pmico_objref_to_sv (CORBA::Object *obj)
 {
+    CM_DEBUG(("pmico_objref_to_sv(%p)\n",obj));
     if (CORBA::is_nil (obj))
 	// FIXME: memory leaks?
 	return newSVsv(&PL_sv_undef);
@@ -449,7 +450,7 @@ union_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     if (!res->union_put_end())
 	return false;
 
-    return newRV_noinc((SV *)av);
+    return (newRV_noinc((SV *)av) != 0);
 }
 
 static bool
@@ -602,6 +603,7 @@ typecode_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 static bool 
 sv_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
+    CM_DEBUG(("sv_to_any(tc->kind='%ld')\n",tc->kind()));
     switch (tc->kind()) {
     case CORBA::tk_null:
     case CORBA::tk_void:

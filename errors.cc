@@ -1,6 +1,7 @@
 /* -*- mode: C++; c-file-style: "bsd" -*- */
 
 #include "pmico.h"
+#undef minor
 
 struct SystemExceptionRec {
     char *repoid;
@@ -230,6 +231,7 @@ pmico_find_exception (const char *repoid)
 {
     SV **svp;
     
+    CM_DEBUG(("pmico_find_exception(repoid='%s')\n",repoid));
     if (!exceptions_hv)
 	return NULL;
 
@@ -247,6 +249,7 @@ pmico_setup_exception (const char *repoid, const char *pkg,
    string varname;
    SV *sv;
 
+   CM_DEBUG(("pmico_setup_exception(repoid='%s',pkg='%s',parent='%s')\n",repoid,pkg,parent));
    // Check if this package has been set up (FIXME: this isn't really
    // necessary, since we do it in define_exception)
    if (!exceptions_hv)
@@ -269,12 +272,13 @@ pmico_setup_exception (const char *repoid, const char *pkg,
 void
 pmico_init_exceptions (void)
 {
-    for (int i=1; i<num_system_exceptions; i++) {
+    int i;
+    for ( i=1; i<num_system_exceptions; i++) {
 	pmico_setup_exception (system_exceptions[i].repoid,
 			       system_exceptions[i].package,
 			       "CORBA::SystemException");
     }
-    for (int i=1; i<num_builtin_exceptions; i++) {
+    for ( i=1; i<num_builtin_exceptions; i++) {
 	pmico_setup_exception (builtin_exceptions[i].repoid,
 			       builtin_exceptions[i].package,
 			       "CORBA::UserException");
@@ -361,6 +365,7 @@ pmico_user_except (const char *repoid, SV *value)
 {
     dSP;
 
+    CM_DEBUG(("pmico_user_except('%s')\n",repoid));
     if (value)
 	sv_2mortal(value);
     const char *pkg = pmico_find_exception (repoid);

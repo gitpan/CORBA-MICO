@@ -53,7 +53,7 @@ T_OBJECTID
 		$var = new PortableServer::ObjectId (len);
 		$var->length(len);
 		for (STRLEN i = 0 ; i < len ; i++) {
-		    $var\[i] = str[i];
+		    $var\[(unsigned long)i] = str[i];
 		}	
 	}
 T_LONGLONG
@@ -80,7 +80,7 @@ T_OBJECTID
 		char *pv = SvPVX ($arg);
 		
 		for (unsigned int i = 0 ; i < $var->length() ; i++) {
-		    pv[i] = $var\[i];
+		    pv[i] = $var\[(unsigned long)i];
 		}	
 		pv[$var->length()] = '\\0';
 	}

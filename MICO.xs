@@ -5,6 +5,9 @@
 #include "exttypes.h"
 #include "dispatcher.h"
 #include <mico/ir.h>
+#undef minor			// AIX defines such a strange macros
+#undef shutdown			// Win32 defines such a strange macros
+#undef rewind			// Win32 defines such a strange macros
 
 /* FIXME: Boot check screws up with egcs... */
 #undef XS_VERSION_BOOTCHECK
@@ -337,7 +340,7 @@ resolve_initial_references (self, id)
     char *     id
     CODE:
     {
-	CORBA::Object *obj = 0;
+ 	CORBA::Object *obj = CORBA::Object::_nil();
 	try {
 	  obj = self->resolve_initial_references (id);
 	} catch (CORBA::SystemException &ex) {
@@ -386,12 +389,12 @@ string_to_object (self, str)
     OUTPUT:
     RETVAL
 
-int
+bool
 preload (self, id)
     CORBA::ORB self;
     char *     id
     CODE:
-    pmico_load_contained (NULL, self, id);
+    RETVAL = (pmico_load_contained (NULL, self, id) != 0);
     OUTPUT:
     RETVAL
 
@@ -435,11 +438,9 @@ _get_interface (self)
     CORBA::Object self;
     CODE:
     try {
-        RETVAL = self->_get_interface();
+      RETVAL = self->_get_interface();
     } catch (CORBA::SystemException &ex) {
-	pmico_throw (pmico_system_except (ex->_repoid (),
-					  ex->minor (),
-					  ex->completed ()));
+      pmico_throw (pmico_system_except(ex._repoid(),ex.minor(),ex.completed()));
     }
     OUTPUT:
     RETVAL
@@ -448,7 +449,7 @@ int
 _non_existent (self)
     CORBA::Object self;
     CODE:
-		RETVAL = self->_non_existent();
+    RETVAL = self->_non_existent();
     OUTPUT:
     RETVAL
 
@@ -457,12 +458,10 @@ _is_a (self, repoId)
     CORBA::Object self;
     char * repoId;
     CODE:
-		try {
-    	RETVAL = self->_is_a(repoId);
+    try {
+      RETVAL = self->_is_a(repoId);
     } catch (CORBA::SystemException &ex) {
-			pmico_throw (pmico_system_except(ex->_repoid(),
-									 ex->minor(),
-									 ex->completed()));
+      pmico_throw (pmico_system_except(ex._repoid(),ex.minor(),ex.completed()));
     }
     OUTPUT:
     RETVAL
@@ -470,32 +469,28 @@ _is_a (self, repoId)
 int
 _is_equivalent (self, obj)
     CORBA::Object self;
-		CORBA::Object obj;
-		CODE:
+    CORBA::Object obj;
+    CODE:
     try {
       RETVAL = self->_is_equivalent((CORBA::Object_ptr)obj);
-		} catch (CORBA::SystemException &ex) {
-			pmico_throw (pmico_system_except(ex->_repoid(),
-									 ex->minor(),
-									 ex->completed()));
-		}
-		OUTPUT:
-		RETVAL
+    } catch (CORBA::SystemException &ex) {
+      pmico_throw (pmico_system_except(ex._repoid(),ex.minor(),ex.completed()));
+    }
+    OUTPUT:
+    RETVAL
 
 unsigned long
 _hash (self, maximum)
     CORBA::Object self;
-		unsigned long maximum;
-		CODE:
-		try {
-    	RETVAL = self->_hash(maximum);
+    unsigned long maximum;
+    CODE:
+    try {
+      RETVAL = self->_hash(maximum);
     } catch (CORBA::SystemException &ex) {
-			pmico_throw (pmico_system_except(ex->_repoid(),
-									 ex->minor(),
-									 ex->completed()));
+      pmico_throw (pmico_system_except(ex._repoid(),ex.minor(),ex.completed()));
     }
     OUTPUT:
-		RETVAL
+    RETVAL
 
 char *
 _repoid (self)
@@ -1075,7 +1070,7 @@ PortableServer::POA::create_POA (adapter_name, mngr_sv, ...)
     CODE:
     CORBA::PolicyList_var policies;
     PortableServer::POAManager *mngr;
-    int npolicies;
+    MICO_ULong npolicies;
     if (items % 2 != 1)
         croak("PortableServer::POA::create_POA requires an even number of arguments\n");
 
@@ -1093,7 +1088,7 @@ PortableServer::POA::create_POA (adapter_name, mngr_sv, ...)
     npolicies = (items - 3) / 2;
     policies = new CORBA::PolicyList (npolicies);
     policies->length (npolicies);
-    for (int i=0 ; i<npolicies; i++)
+    for (MICO_ULong i=0 ; i<npolicies; i++)
         policies[i] = make_policy (THIS, SvPV(ST(3+i*2), PL_na), 
 				   SvPV(ST(4+i*2), PL_na));
 
@@ -1382,6 +1377,7 @@ PortableServer::POAManager::get_state ()
 				break;
 
 			case PortableServer::POAManager::INACTIVE:
+			default: // compiler complains otherwise
 				RETVAL = "INACTIVE";
 				break;
 		}
@@ -2337,14 +2333,14 @@ set_members(self,members)
       SV** id    = hv_fetch( hv, "id",    2, 0 );
       if( !id || !SvPOK(*id) )
         croak("members - must contain string field 'id'");
-      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+      mbrs[(unsigned long)i].id = CORBA::string_dup( SvPV(*id, PL_na) );
 
       SV** value = hv_fetch( hv, "value", 5, 0 );
       if( !value || !sv_isa(*value, "CORBA::Any"))
         croak("members - must contain CORBA::Any field 'value'");
       IV tmp = SvIV((SV*)SvRV(*value));
       CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
-      mbrs[i].value = *any;
+      mbrs[(unsigned long)i].value = *any;
     }
     try {
       self->set_members( mbrs );
@@ -2365,8 +2361,8 @@ get_members_as_dyn_any(self)
         HV* p_mbr = newHV();
 	sv_2mortal((SV*)p_mbr);
         
-	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
-	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[i].value), 0);
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[(unsigned long)i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[(unsigned long)i].value), 0);
 
         av_push(RETVAL, newRV_inc((SV*)p_mbr));
       }
@@ -2394,14 +2390,14 @@ set_members_as_dyn_any(self,members)
       SV** id    = hv_fetch( hv, "id",    2, 0 );
       if( !id || !SvPOK(*id) )
         croak("members - must contain string field 'id'");
-      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+      mbrs[(unsigned long)i].id = CORBA::string_dup( SvPV(*id, PL_na) );
 
       SV** value = hv_fetch( hv, "value", 5, 0 );
       if( !value || !sv_isa(*value, "DynamicAny::DynAny"))
         croak("members - must contain DynamicAny::DynAny field 'value'");
       IV tmp = SvIV((SV*)SvRV(*value));
       DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
-      mbrs[i].value = dynany->copy();
+      mbrs[(unsigned long)i].value = dynany->copy();
     }
     try {
       self->set_members_as_dyn_any( mbrs );
@@ -2586,7 +2582,7 @@ set_elements(self,elements)
         croak("elements - must contain CORBA::Any values");
       IV tmp = SvIV((SV*)SvRV(sv));
       CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
-      mbrs[i] = *any;
+      mbrs[(unsigned long)i] = *any;
     }
     try {
       self->set_elements( mbrs );
@@ -2604,7 +2600,7 @@ get_elements_as_dyn_any(self)
       RETVAL = newAV();
       av_extend(RETVAL, mbrs->length());
       for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
-        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[i]) );
+        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[(unsigned long)i]) );
       }
     OUTPUT:
       RETVAL
@@ -2627,7 +2623,7 @@ set_elements_as_dyn_any(self,elements)
         croak("elements - must contain DynamicAny::DynAny values");
       IV tmp = SvIV((SV*)SvRV(sv));
       DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
-      mbrs[i] = dynany->copy();
+      mbrs[(unsigned long)i] = dynany->copy();
     }
     try {
       self->set_elements_as_dyn_any( mbrs );
@@ -2685,7 +2681,7 @@ set_elements(self,elements)
         croak("elements - must contain CORBA::Any values");
       IV tmp = SvIV((SV*)SvRV(sv));
       CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
-      mbrs[i] = *any;
+      mbrs[(unsigned long)i] = *any;
     }
     try {
       self->set_elements( mbrs );
@@ -2703,7 +2699,7 @@ get_elements_as_dyn_any(self)
       RETVAL = newAV();
       av_extend(RETVAL, mbrs->length());
       for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
-        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[i]) );
+        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[(unsigned long)i]) );
       }
     OUTPUT:
       RETVAL
@@ -2726,7 +2722,7 @@ set_elements_as_dyn_any(self,elements)
         croak("elements - must contain DynamicAny::DynAny values");
       IV tmp = SvIV((SV*)SvRV(sv));
       DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
-      mbrs[i] = dynany->copy();
+      mbrs[(unsigned long)i] = dynany->copy();
     }
     try {
       self->set_elements_as_dyn_any( mbrs );
@@ -2792,8 +2788,8 @@ get_members(self)
         HV* p_mbr = newHV();
 	sv_2mortal((SV*)p_mbr);
         
-	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
-	hv_store(p_mbr, "value", 5, pmico_any_to_sv(&mbrs[i].value), 0);
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[(unsigned long)i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_any_to_sv(&mbrs[(unsigned long)i].value), 0);
 
         av_push(RETVAL, newRV_inc((SV*)p_mbr));
       }
@@ -2821,14 +2817,14 @@ set_members(self,members)
       SV** id    = hv_fetch( hv, "id",    2, 0 );
       if( !id || !SvPOK(*id) )
         croak("members - must contain string field 'id'");
-      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+      mbrs[(unsigned long)i].id = CORBA::string_dup( SvPV(*id, PL_na) );
 
       SV** value = hv_fetch( hv, "value", 5, 0 );
       if( !value || !sv_isa(*value, "CORBA::Any"))
         croak("members - must contain CORBA::Any field 'value'");
       IV tmp = SvIV((SV*)SvRV(*value));
       CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
-      mbrs[i].value = *any;
+      mbrs[(unsigned long)i].value = *any;
     }
     try {
       self->set_members( mbrs );
@@ -2849,8 +2845,8 @@ get_members_as_dyn_any(self)
         HV* p_mbr = newHV();
 	sv_2mortal((SV*)p_mbr);
         
-	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
-	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[i].value), 0);
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[(unsigned long)i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[(unsigned long)i].value), 0);
 
         av_push(RETVAL, newRV_inc((SV*)p_mbr));
       }
@@ -2878,14 +2874,14 @@ set_members_as_dyn_any(self,members)
       SV** id    = hv_fetch( hv, "id",    2, 0 );
       if( !id || !SvPOK(*id) )
         croak("members - must contain string field 'id'");
-      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+      mbrs[(unsigned long)i].id = CORBA::string_dup( SvPV(*id, PL_na) );
 
       SV** value = hv_fetch( hv, "value", 5, 0 );
       if( !value || !sv_isa(*value, "DynamicAny::DynAny"))
         croak("members - must contain DynamicAny::DynAny field 'value'");
       IV tmp = SvIV((SV*)SvRV(*value));
       DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
-      mbrs[i].value = dynany->copy();
+      mbrs[(unsigned long)i].value = dynany->copy();
     }
     try {
       self->set_members_as_dyn_any( mbrs );

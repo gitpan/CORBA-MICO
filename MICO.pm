@@ -14,7 +14,7 @@ require CORBA::MICO::LongDouble;
 
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.6.4';
+$VERSION = '0.6.5';
 
 bootstrap CORBA::MICO $VERSION;
 
@@ -30,9 +30,10 @@ sub import {
 	while (@ids) {
 	    my ($id, $idlfile) = splice(@ids,0,2);
 
-	    if (!$orb->preload($id)) {
+	    eval { $orb->preload($id); };
+	    if( $@ ) {
 		require Carp;
-		Carp::carp("Could not preload '$_'");
+		Carp::carp("Could not preload '$id'");
 	    } 
 	}
     }
@@ -313,8 +314,9 @@ object implements.
 =item preload ( REPOID )
 
 Force the interface specified by REPOID to be loaded from the
-Interface Repository. Returns a true value if the operation
-succeeds.
+Interface Repository. Returns a true value if REPOID represents
+interface (dk_Interface), false otherwise. In case of fail method
+calls Carp::croak().
 
 =back
 

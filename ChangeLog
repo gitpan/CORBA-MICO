@@ -1,3 +1,109 @@
+2002-12-15 17:16  Nikolay Logvinov <logvinon@mail.ru>
+
+	* developers: new developer - Nico Mack
+
+2002-12-15 17:08  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MANIFEST, MICO.def, Makefile.PL, Makefile.win32, README.win32:
+	Extend search path for MICO library
+
+2002-12-15 16:24  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MANIFEST, mico-2.2.7-checker.patch, start-servers.sh: Remove old
+	files. Use standard MICO IDL-files in test environment.
+
+2002-11-21 15:33  Nico Mack <neckelatius@users.sourceforge.net>
+
+	* CONFIG.win32, Makefile.PL, README.win32: Unified Makefile.PL
+	installation procedure for both unix and win32 systems
+
+2002-11-18 12:31  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.def: port to Win32
+
+2002-11-15 19:49  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.win32: port to Win32
+
+2002-11-15 19:45  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.win32: port to Win32
+
+2002-11-15 18:24  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.PL: port to Win32
+
+2002-11-15 17:40  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, Makefile.win32, errors.cc, exttypes.cc, exttypes.h,
+	interfaces.cc, server.cc, server.h, typemap: port to Win32
+
+2002-10-18 19:16  Nikolay Logvinov <logvinon@mail.ru>
+
+	* client: add example for type any
+
+2002-10-09 14:01  Pavel Rousnak <rousnak@users.sourceforge.net>
+
+	* ccc/ccc: Invoke $orb->preload() with 'eval'
+
+2002-09-10 18:25  Nikolay Logvinov <logvinon@mail.ru>
+
+	* errors.cc, interfaces.cc, server.cc, types.cc: fixed problem with
+	decoding UserException. Initialize request with ExceptionList
+	before invoking.
+
+2001-11-22 11:24  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm: fix description of method 'preload'
+
+2001-11-22 11:20  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm: up version to 0.6.5
+
+2001-11-22 11:20  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm: fix usage of 'preload' method
+
+2001-11-22 10:55  Nikolay Logvinov <logvinon@mail.ru>
+
+	* interfaces.cc: add debug output
+
+2001-11-01 12:37  Arun Kumar U <bksys@vsnl.com>
+
+	* Makefile.PL: Fixed $Config{'cc'} typo & Makefile options for
+	linux
+
+2001-10-24 15:49  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, MICO.xs: some fixes suggested by Philippe Causse
+	<philippe.causse@ericsson.dk>
+
+2001-10-24 14:27  Nikolay Logvinov <logvinon@mail.ru>
+
+	* Makefile.PL, pmico.h, types.cc: add debug output facility and use
+	it
+
+2001-10-24 13:44  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, Makefile.PL, client, errors.cc, interfaces.cc, types.cc:
+	compile with IBM VisualAge C++ for AIX
+
+2001-10-23 18:09  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: fix reference dereference operator
+
+2001-10-23 17:59  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, pmico.h: clean off a lot of compiler complains
+
+2001-10-23 17:25  Nikolay Logvinov <logvinon@mail.ru>
+
+	* ccc/Makefile.PL: avoid to generate Makefile if Gtk is absent
+
+2001-10-23 11:17  Nikolay Logvinov <logvinon@mail.ru>
+
+	* MANIFEST: remove redudant file
+
 2001-10-22 18:33  Nikolay Logvinov <logvinon@mail.ru>
 
 	* MICO.pm: Up version to 0.6.4
@@ -132,10 +238,6 @@
 2001-09-04 11:31  Pavel Rousnak <rousnak@users.sourceforge.net>
 
 	* ccc/Makefile.PL: 'PREREQ_PM' - required modules/versions added
-
-2001-09-03 13:16  Pavel Rousnak <rousnak@users.sourceforge.net>
-
-	* ir-browser/: README, TCUtils.pm, browser: Removed, CCC added
 
 2001-09-03 13:06  Pavel Rousnak <rousnak@users.sourceforge.net>
 
@@ -303,10 +405,8 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
-	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
-	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
-	mico/ir_base.idl: Initial revision
+	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
+	shlib/perl-client, shlib/server.cc: Initial revision
 
 1999-06-13 18:35  Owen Taylor  <otaylor@redhat.com>
 
@@ -319,8 +419,7 @@
 	server.h, start-servers.sh, tictactoe, typemap, types.cc,
 	MICO/Fixed.pm, MICO/LongDouble.pm, MICO/LongLong.pm,
 	MICO/ULongLong.pm, MICO/internals.fig, MICO/internals.pod,
-	MICO/internals.ps, MICO/mapping.pod, ir-browser/README,
-	ir-browser/TCUtils.pm, ir-browser/browser, shlib/hello,
-	shlib/hello.idl, shlib/perl-client, shlib/server.cc, mico/ir.idl,
-	mico/ir_base.idl: Initial import of Perl bindings for MICO
+	MICO/internals.ps, MICO/mapping.pod, shlib/hello, shlib/hello.idl,
+	shlib/perl-client, shlib/server.cc: Initial import of Perl bindings
+	for MICO
 

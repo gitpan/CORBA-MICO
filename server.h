@@ -81,11 +81,11 @@ public:
     }
 
     PortableServer::Servant preinvoke  (const PortableServer::ObjectId& oid,
-				        const PortableServer::POA_ptr   adapter,
+				        PortableServer::POA_ptr   adapter,
 				        const char *                    operation,
 				        PortableServer::ServantLocator::Cookie &the_cookie);
     void                    postinvoke (const PortableServer::ObjectId& oid,
-					const PortableServer::POA_ptr   adapter,
+					PortableServer::POA_ptr   adapter,
 					const char *                    operation,
 					PortableServer::ServantLocator::Cookie  the_cookie,
 					PortableServer::Servant         serv);

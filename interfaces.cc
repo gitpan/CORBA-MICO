@@ -2,6 +2,7 @@
 
 #include "pmico.h"
 #include <mico/ir.h>
+#undef minor
 
 const I32 OFFSET = 0x10000000;
 const I32 OPERATION_BASE = 0;
@@ -67,10 +68,12 @@ decode_exception (CORBA::Exception *ex,
 		  CORBA::OperationDescription *opr)
 {
     CORBA::UnknownUserException *uuex = CORBA::UnknownUserException::_downcast(ex);
+    CM_DEBUG(("decode_exception(ex='%s')\n",ex->_repoid()));
 
     if (uuex) {
 	// A user exception, check against the possible exceptions for
 	// this call.
+        CM_DEBUG(("decode_exception():_except_repoid='%s')\n",uuex->_except_repoid()));
 	if (opr)
 	    for (unsigned int i = 0 ; i<opr->exceptions.length() ; i++) {
 		if (!strcmp(opr->exceptions[i].id, uuex->_except_repoid())) {
@@ -175,6 +178,9 @@ XS(_pmico_callStub)
 	}
 	req->result()->value()->set_type ( opr->result );
 
+	for( i = 0; i < opr->exceptions.length(); i++ ) {
+	  req->exceptions()->add( opr->exceptions[i].type );
+	}
     } else if (index >= GETTER_BASE && index < SETTER_BASE) {
 	req->result()->value()->set_type ( desc->attributes[index-GETTER_BASE].type );
 
@@ -198,14 +204,16 @@ XS(_pmico_callStub)
     } catch(CORBA::Exception) {
     }
 
-    if (req->env()->exception()) {
+    CORBA::Exception* excp = req->env()->exception();
+    if (excp) {
+        CM_DEBUG(("_pmico_callStub():excp->_repoid='%s'\n",excp->_repoid()));
 	CORBA::OperationDescription *opr;
 	if (index >= OPERATION_BASE && index < GETTER_BASE) {
 	    opr = &desc->operations[index-OPERATION_BASE];
 	} else {
 	    opr = NULL;
 	}
-	decode_exception (req->env()->exception(), opr);
+	decode_exception( excp, opr);
 	// Will not return
     }
 
@@ -269,6 +277,7 @@ XS(_pmico_repoid) {
 static void
 define_exception (const char *repoid)
 {
+    CM_DEBUG(("define_exception('%s')\n",repoid));
     if (pmico_find_exception(repoid))
 	return;
 
@@ -325,14 +334,15 @@ pmico_init_interface (CORBA::InterfaceDef *iface, const char *id)
 	id = desc->id;
 
     // Set up the interface's operations and attributes
-    for ( unsigned int i = 0 ; i < desc->operations.length() ; i++) {
+    unsigned int i;
+    for ( i = 0 ; i < desc->operations.length() ; i++) {
         CORBA::OperationDescription *opr = &desc->operations[i];
 	define_method (info->pkg.c_str(), "::", opr->name, OPERATION_BASE + i);
 	for ( unsigned int j = 0 ; j < opr->exceptions.length() ; j++)
 	  define_exception ( opr->exceptions[j].id );
     }
 
-    for ( unsigned int i = 0 ; i < desc->attributes.length() ; i++) {
+    for ( i = 0 ; i < desc->attributes.length() ; i++) {
 	if (desc->attributes[i].mode == CORBA::ATTR_NORMAL) {
 	    define_method (info->pkg.c_str(), "::_set_", desc->attributes[i].name, 
 			   SETTER_BASE + i);
@@ -345,7 +355,7 @@ pmico_init_interface (CORBA::InterfaceDef *iface, const char *id)
     
     AV *isa_av = perl_get_av ( (char *)(info->pkg + "::ISA").c_str(), TRUE );
 
-    for ( unsigned int i = 0 ; i < desc->base_interfaces.length() ; i++) {
+    for ( i = 0 ; i < desc->base_interfaces.length() ; i++) {
 	PMicoIfaceInfo *info = pmico_find_interface_description(desc->base_interfaces[i]);
 	if (!info) {
 		CORBA::Contained_var base = iface_repository->lookup_id (desc->base_interfaces[i]);
@@ -399,6 +409,7 @@ pmico_load_contained (CORBA::Contained *_contained, CORBA::ORB_ptr _orb,
 		      const char *_id)
 {
     assert (_contained != NULL || _id != NULL);
+    CM_DEBUG(("pmico_load_contained(%p,%p,'%s')\n",_contained,_orb,_id));
 
     CORBA::Contained_var contained = CORBA::Contained::_duplicate (_contained);
     
@@ -445,7 +456,7 @@ pmico_load_contained (CORBA::Contained *_contained, CORBA::ORB_ptr _orb,
 	    else {
 		CORBA::String_var pkg = contained->absolute_name();
 		if (!strncmp(pkg, "::", 2))
-		    pkgname = &pkg[2];
+		    pkgname = &pkg[(CORBA::ULong)2];
 		else
 		    pkgname = pkg;
 	    }
