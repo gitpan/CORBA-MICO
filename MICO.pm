@@ -14,7 +14,7 @@ require CORBA::MICO::LongDouble;
 
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.6.1';
+$VERSION = '0.6.2';
 
 bootstrap CORBA::MICO $VERSION;
 
@@ -131,6 +131,27 @@ sub new {
 	$pkg->SUPER::new(@_);
     }
 }
+
+package DynamicAny;
+
+package DynamicAny::DynAny;
+
+package DynamicAny::DynFixed;
+@DynamicAny::DynFixed::ISA    = qw(DynamicAny::DynAny);
+package DynamicAny::DynEnum;
+@DynamicAny::DynEnum::ISA     = qw(DynamicAny::DynAny);
+package DynamicAny::DynStruct;
+@DynamicAny::DynStruct::ISA   = qw(DynamicAny::DynAny);
+package DynamicAny::DynUnion;
+@DynamicAny::DynUnion::ISA    = qw(DynamicAny::DynAny);
+package DynamicAny::DynSequence;
+@DynamicAny::DynSequence::ISA = qw(DynamicAny::DynAny);
+package DynamicAny::DynArray;
+@DynamicAny::DynArray::ISA    = qw(DynamicAny::DynAny);
+package DynamicAny::DynValue;
+@DynamicAny::DynArray::ISA    = qw(DynamicAny::DynAny);
+
+package DynamicAny::DynAnyFactory;
 
 # Preloaded methods go here.
 

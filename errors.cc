@@ -177,6 +177,15 @@ static BuiltinExceptionRec builtin_exceptions[] = {
     { "IDL:omg.org/CORBA/TypeCode/BadKind:1.0",
       "CORBA::TypeCode::BadKind",
       PMICO_TYPECODE_BAD_KIND },
+    { "IDL:omg.org/DynamicAny/DynAny/InvalidValue:1.0",
+      "DynamicAny::DynAny::InvalidValue",
+      (PMicoBuiltinException)0 },
+    { "IDL:omg.org/DynamicAny/DynAny/TypeMismatch:1.0",
+      "DynamicAny::DynAny::TypeMismatch",
+      (PMicoBuiltinException)0 },
+    { "IDL:omg.org/DynamicAny/DynAnyFactory/InconsistentTypeCode:1.0",
+      "DynamicAny::DynAnyFactory::InconsistentTypeCode",
+      (PMicoBuiltinException)0 },
 };
 
 static const int num_builtin_exceptions =

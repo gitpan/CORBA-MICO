@@ -49,5 +49,18 @@ module Account {
     Amount balance();
     AcctCounter counter();
     void server_exit ();
+
+    // DynamicAny test
+    enum da_enum {
+      da_enum_1, da_enum_2, da_enum_3
+    };
+    struct da_struct {
+      long		lval;
+      string		sval;
+      Amount		fval;
+      da_enum		enval;
+    };
+    any get_da_struct();
+
   };
 };

@@ -22,6 +22,16 @@ PortableServer::ObjectId     T_OBJECTID
 CORBA::MICO::GtkDispatcher    T_PTROBJ
 CORBA::MICO::ServerlessObject T_PTROBJ
 
+DynamicAny::DynAny		T_PTROBJ
+DynamicAny::DynFixed		T_PTROBJ
+DynamicAny::DynEnum		T_PTROBJ
+DynamicAny::DynStruct		T_PTROBJ
+DynamicAny::DynUnion		T_PTROBJ
+DynamicAny::DynSequence		T_PTROBJ
+DynamicAny::DynArray		T_PTROBJ
+DynamicAny::DynValue		T_PTROBJ
+DynamicAny::DynAnyFactory*	T_MICOOB
+
 ######################################################################
 INPUT
 T_SERVANT

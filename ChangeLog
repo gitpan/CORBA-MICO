@@ -1,3 +1,77 @@
+2001-04-12 11:46  Nikolai Logvinov <logvinon@mail.ru>
+
+	* interfaces.cc: change get_cv() to perl_get_cv() for perl5.005
+	compatibility
+
+2001-04-12 11:37  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, README: Up version to 0.6.2
+
+2001-04-11 13:22  Nikolai Logvinov <logvinon@mail.ru>
+
+	* README, developers: new developer - Pavel Rousnak
+
+2001-04-11 13:09  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamicAny::DynValue
+
+2001-04-11 13:01  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamicAny::DynArray
+
+2001-04-11 12:58  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamicAny::DynSequence
+
+2001-04-11 12:37  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamicAny::DynUnion
+
+2001-04-11 12:06  Nikolai Logvinov <logvinon@mail.ru>
+
+	* Account.idl, MICO.xs, client, pmico.h, types.cc: finish
+	DynamicAny::DynStruct
+
+2001-04-04 12:56  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, client: Fixed DynamicAny::DynFixed::DESTROY,
+	DynamicAny::DynEnum::DESTROY. Add tests for DynamicAny::.
+
+2001-04-04 12:30  Nikolai Logvinov <logvinon@mail.ru>
+
+	* Account.idl, MICO.xs, client, pmico.h, server, typemap, types.cc:
+	Start DynamicAny::DynStruct. Change DESTROY policy for DynamicAny. 
+	Fixed a bug concerned converting CORBA::Any to SV.
+
+2001-04-03 15:28  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.pm: fixed @packet::ISA
+
+2001-03-26 14:48  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamicAny::DynEnum
+
+2001-03-26 13:29  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, typemap: introduce DynamiAny::DynFixed
+
+2001-03-23 13:13  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.pm, MICO.xs, errors.cc: Introduce DynamicAny::DynAny
+
+2001-03-22 11:52  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs, client, errors.cc, typemap: Introduce
+	DynamicAny::DynAnyFactory
+
+2001-03-14 11:54  Nikolai Logvinov <logvinon@mail.ru>
+
+	* MICO.xs: added CORBA::is_nil()
+
+2001-03-13 12:49  Nikolai Logvinov <logvinon@mail.ru>
+
+	* interfaces.cc: catch CORBA::Exception during req->invoke()
+
 2001-03-07 12:25  Nikolai Logvinov <logvinon@mail.ru>
 
 	* MICO.pm, README: Up version to 0.6.1

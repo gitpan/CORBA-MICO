@@ -118,6 +118,20 @@ sub get_pref_any {
     }
 }
 
+sub get_da_struct {
+    my $self = shift;
+
+    my $res = {
+      lval => 17,
+      sval => "seventeen",
+      fval => "17.03",
+      enval => "da_enum_2",
+    };
+
+    
+    return new CORBA::Any (CORBA::TypeCode->new('IDL:Account/Account/da_struct:1.0'), $res );
+}
+
 sub deposit {
     my ($self,$amount) = @_;
     $self->{current_balance} += $amount;

@@ -961,7 +961,10 @@ static SV *
 any_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
     CORBA::Any *a = new CORBA::Any;
-    *a = *any; //*any >>= *a;
+    //*any >>= *a;
+    const CORBA::Any *extracted;
+    *any >>= extracted;
+    *a = *extracted;
 
     SV *res = newSV(0);
     return sv_setref_pv (res, "CORBA::Any", (void *)a);
@@ -1159,3 +1162,67 @@ pmico_from_any (CORBA::Any *any)
 {
     return sv_from_any (any, any->type());
 }
+
+
+const char* const
+TCKind_to_str( CORBA::TCKind kind ) {
+  static const char *const kinds[] = {
+      "tk_null",
+      "tk_void",
+      "tk_short",
+      "tk_long",
+      "tk_ushort",
+      "tk_ulong",
+      "tk_float",
+      "tk_double",
+      "tk_boolean",
+      "tk_char",
+      "tk_octet",
+      "tk_any",
+      "tk_TypeCode",
+      "tk_Principal",
+      "tk_objref",
+      "tk_struct",
+      "tk_union",
+      "tk_enum",
+      "tk_string",
+      "tk_sequence",
+      "tk_array",
+      "tk_alias",
+      "tk_except",
+      "tk_longlong",
+      "tk_ulonglong",
+      "tk_longdouble",
+      "tk_wchar",
+      "tk_wstring",
+      "tk_fixed",
+      "tk_value",
+      "tk_value_box",
+      "tk_native",
+      "tk_abstract_interface",
+  };
+  return ( kind < (CORBA::TCKind)(sizeof(kinds) / sizeof(kinds[0])) ) ?
+      kinds[kind] :
+      NULL;
+}
+
+// Create a "CORBA::Any" SV from an Any
+SV *
+pmico_any_to_sv(CORBA::Any *any)
+{
+    CORBA::Any *a = new CORBA::Any;
+    *a = *any;
+    SV *res = newSV(0);
+    return sv_setref_pv (res, "CORBA::Any", (void *)a);
+}
+
+// Create a "DynamicAny::DynAny" SV from an DynAny
+SV *
+pmico_dyn_any_to_sv(DynamicAny::DynAny *dynany)
+{
+    DynamicAny::DynAny *a = dynany->copy();
+    SV *res = newSV(0);
+    return sv_setref_pv (res, "DynamicAny::DynAny", (void *)a);
+}
+
+

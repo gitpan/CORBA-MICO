@@ -193,7 +193,10 @@ XS(_pmico_callStub)
 
     // Invoke request
 
-    req->invoke();
+    try {
+      req->invoke();
+    } catch(CORBA::Exception) {
+    }
 
     if (req->env()->exception()) {
 	CORBA::OperationDescription *opr;
@@ -283,7 +286,7 @@ static void
 define_method (const char *pkg, const char *prefix, const char *name, I32 index)
 {
     string fullname = string (pkg) + prefix + name;
-    if( get_cv( (char *)fullname.c_str(), 0 ) ) {
+    if( perl_get_cv( (char *)fullname.c_str(), 0 ) ) {
       return;
     }
 

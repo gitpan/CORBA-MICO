@@ -99,3 +99,9 @@ void              pmico_objref_destroy   (CORBA::Object *obj);
 bool              pmico_to_any           (CORBA::Any *res, SV *sv);
 // Create a SV (perl data structure) from an Any
 SV *              pmico_from_any         (CORBA::Any *any);
+// Create a "CORBA::Any" SV from an Any
+SV *              pmico_any_to_sv        (CORBA::Any *any);
+// Create a "DynamicAny::DynAny" SV from an DynAny
+SV *		  pmico_dyn_any_to_sv	 (DynamicAny::DynAny *dynany);
+// Convert CORBA::TCKind to string representation
+const char* const TCKind_to_str( CORBA::TCKind kind );

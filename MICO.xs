@@ -24,6 +24,15 @@ typedef PortableServer::POAManager     PortableServer__POAManager;
 typedef PortableServer::Current        PortableServer__Current;
 typedef PortableServer::ObjectId_var   PortableServer__ObjectId;
 typedef PortableServer::Servant        PortableServer__ServantBase;
+typedef DynamicAny::DynAny_ptr		DynamicAny__DynAny;
+typedef DynamicAny::DynFixed_ptr	DynamicAny__DynFixed;
+typedef DynamicAny::DynEnum_ptr		DynamicAny__DynEnum;
+typedef DynamicAny::DynStruct_ptr	DynamicAny__DynStruct;
+typedef DynamicAny::DynUnion_ptr	DynamicAny__DynUnion;
+typedef DynamicAny::DynSequence_ptr	DynamicAny__DynSequence;
+typedef DynamicAny::DynArray_ptr	DynamicAny__DynArray;
+typedef DynamicAny::DynValue_ptr	DynamicAny__DynValue;
+typedef DynamicAny::DynAnyFactory	DynamicAny__DynAnyFactory;
 
 #ifdef HAVE_GTK
 
@@ -203,7 +212,15 @@ ORB_init (id)
 	    for (i=0;i<=av_len(ARGV);i++)
 		argv[i+1] = SvPV(*av_fetch(ARGV, i, 0), PL_na);
 	
-	    RETVAL = CORBA::ORB_init (argc, argv, id);
+	    try {
+	      RETVAL = CORBA::ORB_init (argc, argv, id);
+	    } catch (CORBA::SystemException &ex) {
+	      if (argv)
+	          free (argv);
+	      pmico_throw (pmico_system_except (ex->_repoid (),
+	      					ex->minor (),
+						ex->completed ()));
+	    }
 	    
 	    av_clear (ARGV);
 	    
@@ -214,6 +231,14 @@ ORB_init (id)
 		free (argv);
 	}
     }
+    OUTPUT:
+    RETVAL
+
+bool
+is_nil (self)
+    CORBA::Object self;
+    CODE:
+    RETVAL = CORBA::is_nil (self);
     OUTPUT:
     RETVAL
 
@@ -290,20 +315,25 @@ resolve_initial_references (self, id)
     CODE:
     {
 	CORBA::Object *obj = self->resolve_initial_references (id);
-	
-	// ugly hack
-	PortableServer::POA_ptr poa = PortableServer::POA::_narrow (obj);
-	
-	if (!CORBA::is_nil (poa)) {
-	    RETVAL = newSV(0);
-	    sv_setref_pv(RETVAL, "PortableServer::POA", (void *)poa);
+	if( strcmp( id, "DynAnyFactory" ) == 0 ) {
+	  DynamicAny::DynAnyFactory_ptr dafact = DynamicAny::DynAnyFactory::_narrow(obj);
+	  RETVAL = newSV(0);
+	  sv_setref_pv(RETVAL, "DynamicAny::DynAnyFactory", (void*)dafact);
 	} else {
-	    PortableServer::Current_ptr current = PortableServer::Current::_narrow (obj);
-	    if (!CORBA::is_nil (current)) {
-		RETVAL = newSV(0);
-		sv_setref_pv(RETVAL, "PortableServer::Current", (void *)current);
-	    } else
-		RETVAL = pmico_objref_to_sv (obj);
+	  // ugly hack
+	  PortableServer::POA_ptr poa = PortableServer::POA::_narrow (obj);
+	  
+	  if (!CORBA::is_nil (poa)) {
+	      RETVAL = newSV(0);
+	      sv_setref_pv(RETVAL, "PortableServer::POA", (void *)poa);
+	  } else {
+	      PortableServer::Current_ptr current = PortableServer::Current::_narrow (obj);
+	      if (!CORBA::is_nil (current)) {
+		  RETVAL = newSV(0);
+		  sv_setref_pv(RETVAL, "PortableServer::Current", (void *)current);
+	      } else
+		  RETVAL = pmico_objref_to_sv (obj);
+	  }
 	}
     }
     OUTPUT:
@@ -429,46 +459,7 @@ char *
 kind (self)
     CORBA::TypeCode self
     CODE:
-    static const char *const kinds[] = {
-	"tk_null",
-	"tk_void",
-	"tk_short",
-	"tk_long",
-	"tk_ushort",
-	"tk_ulong",
-	"tk_float",
-	"tk_double",
-	"tk_boolean",
-	"tk_char",
-	"tk_octet",
-	"tk_any",
-	"tk_TypeCode",
-	"tk_Principal",
-	"tk_objref",
-	"tk_struct",
-	"tk_union",
-	"tk_enum",
-	"tk_string",
-	"tk_sequence",
-	"tk_array",
-	"tk_alias",
-	"tk_except",
-	"tk_longlong",
-	"tk_ulonglong",
-	"tk_longdouble",
-	"tk_wchar",
-	"tk_wstring",
-	"tk_fixed",
-	"tk_value",
-	"tk_value_box",
-	"tk_native",
-	"tk_abstract_interface",
-    };
-    CORBA::TCKind kind = self->kind ();
-    if (kind < sizeof(kinds) / sizeof(kinds[0]))
-	RETVAL = (char *)kinds[self->kind ()];
-    else
-        RETVAL = NULL;
+    RETVAL = (char*)TCKind_to_str( self->kind () );
     OUTPUT:
     RETVAL
 
@@ -1485,7 +1476,1356 @@ new (self)
 
 #endif /* HAVE_GTK */
 
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynAny
+void
+DESTROY (self)
+    DynamicAny::DynAny self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
 
+CORBA::TypeCode
+type (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->type();
+    OUTPUT:
+    RETVAL
+
+void
+assign (self, dyn_any)
+    DynamicAny::DynAny self
+    DynamicAny::DynAny dyn_any
+    CODE:
+    try {
+         self->assign( dyn_any );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+from_any (self, any)
+    DynamicAny::DynAny self
+    CORBA::Any any
+    CODE:
+    try {
+         self->from_any( *any );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+CORBA::Any
+to_any (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->to_any();
+    OUTPUT:
+    RETVAL
+
+bool
+equal (self, dyn_any)
+    DynamicAny::DynAny self
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = self->equal(dyn_any);
+    OUTPUT:
+    RETVAL
+
+void
+destroy (self)
+    DynamicAny::DynAny self
+    CODE:
+    self->destroy();
+
+DynamicAny::DynAny
+copy (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->copy();
+    OUTPUT:
+    RETVAL
+
+void
+insert_boolean (self,value)
+    DynamicAny::DynAny self
+    bool value
+    CODE:
+    try {
+      self->insert_boolean((CORBA::Boolean)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_octet (self,value)
+    DynamicAny::DynAny self
+    unsigned char value
+    CODE:
+    try {
+      self->insert_octet((CORBA::Octet)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_char (self,value)
+    DynamicAny::DynAny self
+    char value
+    CODE:
+    try {
+      self->insert_char((CORBA::Char)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_short (self,value)
+    DynamicAny::DynAny self
+    short value
+    CODE:
+    try {
+      self->insert_short((CORBA::Short)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_ushort (self,value)
+    DynamicAny::DynAny self
+    unsigned short value
+    CODE:
+    try {
+      self->insert_ushort((CORBA::UShort)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_long (self,value)
+    DynamicAny::DynAny self
+    long value
+    CODE:
+    try {
+      self->insert_long((CORBA::Long)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_ulong (self,value)
+    DynamicAny::DynAny self
+    unsigned long value
+    CODE:
+    try {
+      self->insert_ulong((CORBA::ULong)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_float (self,value)
+    DynamicAny::DynAny self
+    double value
+    CODE:
+    try {
+      self->insert_float((CORBA::Float)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_double (self,value)
+    DynamicAny::DynAny self
+    double value
+    CODE:
+    try {
+      self->insert_double((CORBA::Double)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_string (self,value)
+    DynamicAny::DynAny self
+    char* value
+    CODE:
+    try {
+      self->insert_string((const char*)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_reference (self,value)
+    DynamicAny::DynAny self
+    CORBA::Object value
+    CODE:
+    try {
+      self->insert_reference((CORBA::Object_ptr)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_typecode (self,value)
+    DynamicAny::DynAny self
+    CORBA::TypeCode value
+    CODE:
+    try {
+      self->insert_typecode((CORBA::TypeCode_ptr)value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_longlong (self,value)
+    DynamicAny::DynAny self
+    CORBA::LongLong value
+    CODE:
+    try {
+      self->insert_longlong(value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_ulonglong (self,value)
+    DynamicAny::DynAny self
+    CORBA::ULongLong value
+    CODE:
+    try {
+      self->insert_ulonglong(value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_longdouble (self,value)
+    DynamicAny::DynAny self
+    CORBA::LongDouble value
+    CODE:
+    try {
+      self->insert_longdouble(value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+# void insert_wchar(in wchar value)
+# void insert_wstring(in wstring value)
+
+void
+insert_any (self,value)
+    DynamicAny::DynAny self
+    CORBA::Any value
+    CODE:
+    try {
+      self->insert_any(*value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+insert_dyn_any (self,value)
+    DynamicAny::DynAny self
+    DynamicAny::DynAny value
+    CODE:
+    try {
+      self->insert_dyn_any(value);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+# void insert_val(in ValueBase value)
+
+bool
+get_boolean (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_boolean();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+   
+unsigned char
+get_octet (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_octet();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+char
+get_char (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_char();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+short
+get_short (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_short();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+unsigned short
+get_ushort (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_ushort();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+long
+get_long (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_long();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+unsigned long
+get_ulong (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_ulong();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+double
+get_float (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_float();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+double
+get_double (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_double();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+char*
+get_string (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_string();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+CORBA::Object
+get_reference (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_reference();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+CORBA::TypeCode
+get_typecode (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_typecode();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+CORBA::LongLong
+get_longlong (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_longlong();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+CORBA::ULongLong
+get_ulonglong (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_ulonglong();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+CORBA::LongDouble
+get_longdouble (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_longdouble();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+# wchar get_wchar()
+# wstring get_wstring()
+
+CORBA::Any
+get_any (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_any();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+DynamicAny::DynAny
+get_dyn_any (self)
+    DynamicAny::DynAny self
+    CODE:
+    try {
+      RETVAL = self->get_dyn_any();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+# ValueBase get_val()
+
+bool
+seek (self,index)
+    DynamicAny::DynAny self
+    long index
+    CODE:
+    RETVAL = self->seek(index);
+    OUTPUT:
+    RETVAL
+
+void
+rewind (self)
+    DynamicAny::DynAny self
+    CODE:
+    self->rewind();
+
+bool
+next (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->next();
+    OUTPUT:
+    RETVAL
+
+unsigned long
+component_count (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->component_count();
+    OUTPUT:
+    RETVAL
+
+DynamicAny::DynAny
+current_component (self)
+    DynamicAny::DynAny self
+    CODE:
+    RETVAL = self->current_component();
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynFixed
+void
+DESTROY (self)
+    DynamicAny::DynFixed self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+char*
+get_value (self)
+    DynamicAny::DynFixed self
+    CODE:
+    RETVAL = self->get_value();
+    OUTPUT:
+    RETVAL
+
+#bool	CORBA V2.3: boolean set_value(in string val) //XXX
+void
+set_value (self,val)
+    DynamicAny::DynFixed self
+    char* val
+    CODE:
+    try {
+      self->set_value(val);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    
+# narrow helper
+DynamicAny::DynFixed
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynFixed::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynEnum
+void
+DESTROY (self)
+    DynamicAny::DynEnum self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+char*
+get_as_string(self)
+    DynamicAny::DynEnum self
+    CODE:
+    RETVAL = self->get_as_string();
+    OUTPUT:
+    RETVAL
+
+void
+set_as_string(self,value)
+    DynamicAny::DynEnum self
+    char* value
+    CODE:
+    try {
+      self->set_as_string(value);
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+unsigned long
+get_as_ulong(self)
+    DynamicAny::DynEnum self
+    CODE:
+    RETVAL = self->get_as_ulong();
+    OUTPUT:
+    RETVAL
+
+void
+set_as_ulong(self,value)
+    DynamicAny::DynEnum self
+    unsigned long value
+    CODE:
+    try {
+      self->set_as_ulong(value);
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+
+
+# narrow helper
+DynamicAny::DynEnum
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynEnum::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynStruct
+void
+DESTROY (self)
+    DynamicAny::DynStruct self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+
+char*
+current_member_name(self)
+    DynamicAny::DynStruct self
+    CODE:
+    try {
+      RETVAL = self->current_member_name();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+
+char*
+current_member_kind(self)
+    DynamicAny::DynStruct self
+    CODE:
+    try {
+      RETVAL = (char*) TCKind_to_str( self->current_member_kind() );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+
+AV*
+get_members(self)
+    DynamicAny::DynStruct self
+    CODE:
+      DynamicAny::NameValuePairSeq_var mbrs = self->get_members();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        HV* p_mbr = newHV();
+	sv_2mortal((SV*)p_mbr);
+        
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_any_to_sv(&mbrs[i].value), 0);
+
+        av_push(RETVAL, newRV_inc((SV*)p_mbr));
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_members(self,members)
+    DynamicAny::DynStruct self
+    SV* members
+    CODE:
+    if( !SvROK(members) )
+      croak("members - must be an array reference");
+    members = SvRV(members);
+    if( SvTYPE(members) != SVt_PVAV )
+      croak("members - must be an array reference");
+    DynamicAny::NameValuePairSeq_var mbrs = new DynamicAny::NameValuePairSeq;
+    mbrs->length(av_len((AV*)members)+1);
+    for( I32 i = 0; i <= av_len((AV*)members); i++ ) {
+      SV* sv = *av_fetch( (AV*)members, i, 0 );
+      if( !SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV) )
+        croak("members - must be array of hashes");
+      HV *hv = (HV *)SvRV(sv);
+
+      SV** id    = hv_fetch( hv, "id",    2, 0 );
+      if( !id || !SvPOK(*id) )
+        croak("members - must contain string field 'id'");
+      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+
+      SV** value = hv_fetch( hv, "value", 5, 0 );
+      if( !value || !sv_isa(*value, "CORBA::Any"))
+        croak("members - must contain CORBA::Any field 'value'");
+      IV tmp = SvIV((SV*)SvRV(*value));
+      CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
+      mbrs[i].value = *any;
+    }
+    try {
+      self->set_members( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+AV*
+get_members_as_dyn_any(self)
+    DynamicAny::DynStruct self
+    CODE:
+      DynamicAny::NameDynAnyPairSeq_var mbrs = self->get_members_as_dyn_any();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        HV* p_mbr = newHV();
+	sv_2mortal((SV*)p_mbr);
+        
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[i].value), 0);
+
+        av_push(RETVAL, newRV_inc((SV*)p_mbr));
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_members_as_dyn_any(self,members)
+    DynamicAny::DynStruct self
+    SV* members
+    CODE:
+    if( !SvROK(members) )
+      croak("members - must be an array reference");
+    members = SvRV(members);
+    if( SvTYPE(members) != SVt_PVAV )
+      croak("members - must be an array reference");
+    DynamicAny::NameDynAnyPairSeq_var mbrs = new DynamicAny::NameDynAnyPairSeq;
+    mbrs->length(av_len((AV*)members)+1);
+    for( I32 i = 0; i <= av_len((AV*)members); i++ ) {
+      SV* sv = *av_fetch( (AV*)members, i, 0 );
+      if( !SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV) )
+        croak("members - must be array of hashes");
+      HV *hv = (HV *)SvRV(sv);
+
+      SV** id    = hv_fetch( hv, "id",    2, 0 );
+      if( !id || !SvPOK(*id) )
+        croak("members - must contain string field 'id'");
+      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+
+      SV** value = hv_fetch( hv, "value", 5, 0 );
+      if( !value || !sv_isa(*value, "DynamicAny::DynAny"))
+        croak("members - must contain DynamicAny::DynAny field 'value'");
+      IV tmp = SvIV((SV*)SvRV(*value));
+      DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
+      mbrs[i].value = dynany->copy();
+    }
+    try {
+      self->set_members_as_dyn_any( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+# narrow helper
+DynamicAny::DynStruct
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynStruct::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynUnion
+void
+DESTROY (self)
+    DynamicAny::DynUnion self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+DynamicAny::DynAny
+get_discriminator (self)
+    DynamicAny::DynUnion self
+    CODE:
+    RETVAL = self->get_discriminator();
+    OUTPUT:
+    RETVAL
+
+void
+set_discriminator (self,d)
+    DynamicAny::DynUnion self
+    DynamicAny::DynAny d
+    CODE:
+    try {
+      self->set_discriminator(d);
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+set_to_default_member (self)
+    DynamicAny::DynUnion self
+    CODE:
+    try {
+      self->set_to_default_member();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+
+void
+set_to_no_active_member (self)
+    DynamicAny::DynUnion self
+    CODE:
+    try {
+      self->set_to_no_active_member();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+
+bool
+has_no_active_member (self)
+    DynamicAny::DynUnion self
+    CODE:
+    RETVAL = self->has_no_active_member();
+    OUTPUT:
+    RETVAL
+
+char *
+discriminator_kind (self)
+    DynamicAny::DynUnion self
+    CODE:
+    RETVAL = (char*)TCKind_to_str( self->discriminator_kind() );
+    OUTPUT:
+    RETVAL
+
+DynamicAny::DynAny
+member (self)
+    DynamicAny::DynUnion self
+    CODE:
+    try {
+      RETVAL = self->member();
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+char*
+member_name (self)
+    DynamicAny::DynUnion self
+    CODE:
+    try {
+      RETVAL = self->member_name();
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+char*
+member_kind (self)
+    DynamicAny::DynUnion self
+    CODE:
+    try {
+      RETVAL = (char*)TCKind_to_str( self->member_kind() );
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+
+# narrow helper
+DynamicAny::DynUnion
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynUnion::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynSequence
+void
+DESTROY (self)
+    DynamicAny::DynSequence self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+unsigned long
+get_length (self)
+    DynamicAny::DynSequence self
+    CODE:
+    RETVAL = self->get_length();
+    OUTPUT:
+    RETVAL
+
+void
+set_length (self,len)
+    DynamicAny::DynSequence self
+    unsigned long len
+    CODE:
+    try {
+      self->set_length(len);
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+      pmico_throw (pmico_builtin_except (ex));
+    }
+
+AV*
+get_elements (self)
+    DynamicAny::DynSequence self
+    CODE:
+    DynamicAny::AnySeq_var els = self->get_elements();
+    RETVAL = newAV();
+    av_extend( RETVAL, els->length() );
+    for( CORBA::ULong i = 0; i < els->length(); i++ ) {
+      av_push( RETVAL, pmico_any_to_sv(&els[i]) );
+    }
+    OUTPUT:
+    RETVAL
+
+void
+set_elements(self,elements)
+    DynamicAny::DynSequence self
+    SV* elements
+    CODE:
+    if( !SvROK(elements) )
+      croak("elements - must be an array reference");
+    elements = SvRV(elements);
+    if( SvTYPE(elements) != SVt_PVAV )
+      croak("elements - must be an array reference");
+    DynamicAny::AnySeq_var mbrs = new DynamicAny::AnySeq;
+    mbrs->length(av_len((AV*)elements)+1);
+    for( I32 i = 0; i <= av_len((AV*)elements); i++ ) {
+      SV* sv = *av_fetch( (AV*)elements, i, 0 );
+      if( !sv_isa(sv, "CORBA::Any"))
+        croak("elements - must contain CORBA::Any values");
+      IV tmp = SvIV((SV*)SvRV(sv));
+      CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
+      mbrs[i] = *any;
+    }
+    try {
+      self->set_elements( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+AV*
+get_elements_as_dyn_any(self)
+    DynamicAny::DynSequence self
+    CODE:
+      DynamicAny::DynAnySeq_var mbrs = self->get_elements_as_dyn_any();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[i]) );
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_elements_as_dyn_any(self,elements)
+    DynamicAny::DynSequence self
+    SV* elements
+    CODE:
+    if( !SvROK(elements) )
+      croak("elements - must be an array reference");
+    elements = SvRV(elements);
+    if( SvTYPE(elements) != SVt_PVAV )
+      croak("elements - must be an array reference");
+    DynamicAny::DynAnySeq_var mbrs = new DynamicAny::DynAnySeq;
+    mbrs->length(av_len((AV*)elements)+1);
+    for( I32 i = 0; i <= av_len((AV*)elements); i++ ) {
+      SV* sv = *av_fetch( (AV*)elements, i, 0 );
+      if( !sv_isa( sv, "DynamicAny::DynAny" ) )
+        croak("elements - must contain DynamicAny::DynAny values");
+      IV tmp = SvIV((SV*)SvRV(sv));
+      DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
+      mbrs[i] = dynany->copy();
+    }
+    try {
+      self->set_elements_as_dyn_any( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+# narrow helper
+DynamicAny::DynSequence
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynSequence::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynArray
+void
+DESTROY (self)
+    DynamicAny::DynArray self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+AV*
+get_elements (self)
+    DynamicAny::DynArray self
+    CODE:
+    DynamicAny::AnySeq_var els = self->get_elements();
+    RETVAL = newAV();
+    av_extend( RETVAL, els->length() );
+    for( CORBA::ULong i = 0; i < els->length(); i++ ) {
+      av_push( RETVAL, pmico_any_to_sv(&els[i]) );
+    }
+    OUTPUT:
+    RETVAL
+
+void
+set_elements(self,elements)
+    DynamicAny::DynArray self
+    SV* elements
+    CODE:
+    if( !SvROK(elements) )
+      croak("elements - must be an array reference");
+    elements = SvRV(elements);
+    if( SvTYPE(elements) != SVt_PVAV )
+      croak("elements - must be an array reference");
+    DynamicAny::AnySeq_var mbrs = new DynamicAny::AnySeq;
+    mbrs->length(av_len((AV*)elements)+1);
+    for( I32 i = 0; i <= av_len((AV*)elements); i++ ) {
+      SV* sv = *av_fetch( (AV*)elements, i, 0 );
+      if( !sv_isa(sv, "CORBA::Any"))
+        croak("elements - must contain CORBA::Any values");
+      IV tmp = SvIV((SV*)SvRV(sv));
+      CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
+      mbrs[i] = *any;
+    }
+    try {
+      self->set_elements( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+AV*
+get_elements_as_dyn_any(self)
+    DynamicAny::DynArray self
+    CODE:
+      DynamicAny::DynAnySeq_var mbrs = self->get_elements_as_dyn_any();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        av_push( RETVAL, pmico_dyn_any_to_sv(mbrs[i]) );
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_elements_as_dyn_any(self,elements)
+    DynamicAny::DynArray self
+    SV* elements
+    CODE:
+    if( !SvROK(elements) )
+      croak("elements - must be an array reference");
+    elements = SvRV(elements);
+    if( SvTYPE(elements) != SVt_PVAV )
+      croak("elements - must be an array reference");
+    DynamicAny::DynAnySeq_var mbrs = new DynamicAny::DynAnySeq;
+    mbrs->length(av_len((AV*)elements)+1);
+    for( I32 i = 0; i <= av_len((AV*)elements); i++ ) {
+      SV* sv = *av_fetch( (AV*)elements, i, 0 );
+      if( !sv_isa( sv, "DynamicAny::DynAny" ) )
+        croak("elements - must contain DynamicAny::DynAny values");
+      IV tmp = SvIV((SV*)SvRV(sv));
+      DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
+      mbrs[i] = dynany->copy();
+    }
+    try {
+      self->set_elements_as_dyn_any( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+# narrow helper
+DynamicAny::DynArray
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynArray::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynValue
+void
+DESTROY (self)
+    DynamicAny::DynValue self
+    CODE:
+//    self->destroy();		//XXX
+    CORBA::release (self);
+
+char*
+current_member_name (self)
+    DynamicAny::DynValue self
+    CODE:
+    try {
+      RETVAL = self->current_member_name();
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+	
+char*
+current_member_kind(self)
+    DynamicAny::DynValue self
+    CODE:
+    try {
+      RETVAL = (char*) TCKind_to_str( self->current_member_kind() );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+
+AV*
+get_members(self)
+    DynamicAny::DynStruct self
+    CODE:
+      DynamicAny::NameValuePairSeq_var mbrs = self->get_members();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        HV* p_mbr = newHV();
+	sv_2mortal((SV*)p_mbr);
+        
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_any_to_sv(&mbrs[i].value), 0);
+
+        av_push(RETVAL, newRV_inc((SV*)p_mbr));
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_members(self,members)
+    DynamicAny::DynStruct self
+    SV* members
+    CODE:
+    if( !SvROK(members) )
+      croak("members - must be an array reference");
+    members = SvRV(members);
+    if( SvTYPE(members) != SVt_PVAV )
+      croak("members - must be an array reference");
+    DynamicAny::NameValuePairSeq_var mbrs = new DynamicAny::NameValuePairSeq;
+    mbrs->length(av_len((AV*)members)+1);
+    for( I32 i = 0; i <= av_len((AV*)members); i++ ) {
+      SV* sv = *av_fetch( (AV*)members, i, 0 );
+      if( !SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV) )
+        croak("members - must be array of hashes");
+      HV *hv = (HV *)SvRV(sv);
+
+      SV** id    = hv_fetch( hv, "id",    2, 0 );
+      if( !id || !SvPOK(*id) )
+        croak("members - must contain string field 'id'");
+      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+
+      SV** value = hv_fetch( hv, "value", 5, 0 );
+      if( !value || !sv_isa(*value, "CORBA::Any"))
+        croak("members - must contain CORBA::Any field 'value'");
+      IV tmp = SvIV((SV*)SvRV(*value));
+      CORBA::Any *any = INT2PTR(CORBA::Any*,tmp);
+      mbrs[i].value = *any;
+    }
+    try {
+      self->set_members( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+AV*
+get_members_as_dyn_any(self)
+    DynamicAny::DynStruct self
+    CODE:
+      DynamicAny::NameDynAnyPairSeq_var mbrs = self->get_members_as_dyn_any();
+      RETVAL = newAV();
+      av_extend(RETVAL, mbrs->length());
+      for( CORBA::ULong i = 0; i < mbrs->length(); i++ ) {
+        HV* p_mbr = newHV();
+	sv_2mortal((SV*)p_mbr);
+        
+	hv_store(p_mbr, "id",    2, newSVpv(mbrs[i].id, 0),          0);
+	hv_store(p_mbr, "value", 5, pmico_dyn_any_to_sv(mbrs[i].value), 0);
+
+        av_push(RETVAL, newRV_inc((SV*)p_mbr));
+      }
+    OUTPUT:
+      RETVAL
+
+void
+set_members_as_dyn_any(self,members)
+    DynamicAny::DynStruct self
+    SV* members
+    CODE:
+    if( !SvROK(members) )
+      croak("members - must be an array reference");
+    members = SvRV(members);
+    if( SvTYPE(members) != SVt_PVAV )
+      croak("members - must be an array reference");
+    DynamicAny::NameDynAnyPairSeq_var mbrs = new DynamicAny::NameDynAnyPairSeq;
+    mbrs->length(av_len((AV*)members)+1);
+    for( I32 i = 0; i <= av_len((AV*)members); i++ ) {
+      SV* sv = *av_fetch( (AV*)members, i, 0 );
+      if( !SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVHV) )
+        croak("members - must be array of hashes");
+      HV *hv = (HV *)SvRV(sv);
+
+      SV** id    = hv_fetch( hv, "id",    2, 0 );
+      if( !id || !SvPOK(*id) )
+        croak("members - must contain string field 'id'");
+      mbrs[i].id = CORBA::string_dup( SvPV(*id, PL_na) );
+
+      SV** value = hv_fetch( hv, "value", 5, 0 );
+      if( !value || !sv_isa(*value, "DynamicAny::DynAny"))
+        croak("members - must contain DynamicAny::DynAny field 'value'");
+      IV tmp = SvIV((SV*)SvRV(*value));
+      DynamicAny::DynAny *dynany = INT2PTR(DynamicAny::DynAny*,tmp);
+      mbrs[i].value = dynany->copy();
+    }
+    try {
+      self->set_members_as_dyn_any( mbrs );
+    } catch (DynamicAny::DynAny::TypeMismatch &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    } catch (DynamicAny::DynAny::InvalidValue &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+      
+# narrow helper
+DynamicAny::DynStruct
+_narrow(dyn_any)
+    DynamicAny::DynAny dyn_any
+    CODE:
+    RETVAL = DynamicAny::DynStruct::_narrow(dyn_any);
+    OUTPUT:
+    RETVAL
+
+
+MODULE = CORBA::MICO		PACKAGE = DynamicAny::DynAnyFactory
+
+void
+DynamicAny::DynAnyFactory::DESTROY ()
+    CODE:
+    CORBA::release (THIS);
+
+DynamicAny::DynAny
+DynamicAny::DynAnyFactory::create_dyn_any(value)
+    CORBA::Any value
+    CODE:
+    try {
+	RETVAL = THIS->create_dyn_any(*value);
+    } catch (DynamicAny::DynAnyFactory::InconsistentTypeCode &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
+DynamicAny::DynAny
+DynamicAny::DynAnyFactory::create_dyn_any_from_type_code(type)
+    CORBA::TypeCode type
+    CODE:
+    try {
+	RETVAL = THIS->create_dyn_any_from_type_code(type);
+    } catch (DynamicAny::DynAnyFactory::InconsistentTypeCode &ex) {
+	pmico_throw (pmico_builtin_except (ex));
+    }
+    OUTPUT:
+    RETVAL
+    
 BOOT:
     pmico_init_exceptions();
     pmico_init_typecodes();

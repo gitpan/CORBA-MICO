@@ -1,7 +1,7 @@
-CORBA::MICO-0.6.1
+CORBA::MICO-0.6.2
 =================
 
-Perl Interface to MICO (Mico Is COrba) version 0.6.1
+Perl Interface to MICO (Mico Is COrba) version 0.6.2
 
 
 Status
@@ -91,7 +91,7 @@ And then run the client program:
 You should see output that looks something like:
 
 ----------
-Using /usr/home/owen/tmp/CORBA-MICO-0.6.1/blib
+Using /usr/home/owen/tmp/CORBA-MICO-0.6.2/blib
 Balance is +500.00
 Favorite color is taupe
 Lottery numbers are 21 63 83 96
@@ -189,7 +189,8 @@ previous test failures.
 =================
 
 URLs   : http://corba-mico.sourceforge.net
-Authors: Owen Taylor (original author) and Nikolai Logvinov (current maintainer)Contact: Nikolai Logvinov <logvinon@users.sourceforge.net>
+Authors: Owen Taylor (original author) and Nikolai Logvinov (current maintainer)
+Contact: Nikolai Logvinov <logvinon@users.sourceforge.net>
 
 =================
 
