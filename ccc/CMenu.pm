@@ -3,13 +3,16 @@ package CORBA::MICO::CMenu;
 use vars qw($serial);
 use Carp;
 
+use vars qw($DEBUG);
+#$DEBUG=1;
+
 #--------------------------------------------------------------------
 # Dynamic menu. Supports a single menu for several 
 # objects. Each time an object becomes active
 # CMenu automatically rebuilds menu so as it becomes appropriate
 # for active object.
 #--------------------------------------------------------------------
-use Gtk 0.7006;
+use Gtk2 '1.140';
 
 #--------------------------------------------------------------------
 # Create new menu
@@ -18,20 +21,25 @@ use Gtk 0.7006;
 sub new {
   my ($type, $topwindow) = @_;
   my $class = ref($type) || $type;
-  my $accel_group = new Gtk::AccelGroup;
+  my $accel_group = new Gtk2::AccelGroup;
   my $menu_name = "<menu_$serial>";
   ++$serial;               
-  my $item_factory = new Gtk::ItemFactory('Gtk::MenuBar',
+  my $item_factory = new Gtk2::ItemFactory('Gtk2::MenuBar',
                                               $menu_name, $accel_group);
-  $accel_group->attach($topwindow);
+  #$accel_group->attach($topwindow);
+  $topwindow->add_accel_group($accel_group);
+
+  my $main_widget = $item_factory->get_widget($menu_name);
   my $self = { 'FACTORY'     => $item_factory,
                'NAME'        => $menu_name,
                'ACCEL_GROUP' => $accel_group,
                'LAST_ACTION' => 0,
                'CURR_ID'     => '',
-               'WIDGET'      => $item_factory->get_widget($menu_name),
+               'WIDGET'      => $main_widget,
                'ITEMS'       => {} };
   bless $self, $class;
+  $self->{'SELFPTR'} = \$self;
+  $main_widget->signal_connect('destroy', sub { $self->close(); 1; });
   return $self;
 }
 
@@ -78,9 +86,13 @@ sub prepare_item {
     if( $path =~ m#(^/.*)/[^/]*$# ) {    # dirname
       $self->prepare_item('', $1, undef, 'Branch', undef, undef);
     }  
+    my $selfptr = $self->{'SELFPTR'};
     $type = 'LastBranch' if $path =~ m#^/_?Help$#i;
-    $self->{'FACTORY'}->create_item([$path, $hotkey, $action, "<$type>"],
-                           sub { $self->item_activated($curr_item, @_) } );
+    my $cdata = [$path, $hotkey, undef, $action, "<$type>"];
+    if( $type =~ /Item/ ) {
+      $cdata->[2] = sub { item_activated_cb($selfptr, $curr_item, @_) };
+    }
+    $self->{'FACTORY'}->create_item($cdata);
   }
   else {
     $curr_item = $items->{$path};
@@ -121,19 +133,30 @@ sub mask_item {
   my $item_factory = $self->{'FACTORY'};
   my $item = $self->{'ITEMS'}->{$name};
   if( not defined($item) ) {
-    carp "No menu item $name";
+    # carp "No menu item $name";
     return;
   }
   return if exists $item->{''};        # do not mask field if it is global
   my $widget = $item_factory->get_widget_by_action($item->{'ACTION'});
-  $widget->set_sensitive($flag);
+  if( defined($widget) ) {
+    $widget->set_sensitive($flag);
+  }  
 }
 
 #--------------------------------------------------------------------
 # Menu callback: item activated
 #--------------------------------------------------------------------
+sub item_activated_cb {
+  my ($selfptr, @args) = @_;
+  warn "item_activated_cb" if $DEBUG;
+  if( defined($$selfptr) ) {
+    $$selfptr->item_activated(@args);
+  }  
+}
+
 sub item_activated {
   my ($self, $item, $widget, $action) = @_;
+  warn "item_activated($self)" if $DEBUG;
   $id = $self->{'CURR_ID'};
   my $cb = $item->{$id};
   if( defined($cb) ) {
@@ -144,6 +167,28 @@ sub item_activated {
     $cb = $item->{''};
     &{$cb->[0]}($cb->[1]) if defined($cb);
   }
+}
+
+#--------------------------------------------------------------------
+sub close {
+  my $self = shift;
+  my $selfptr = $self->{'SELFPTR'};
+  undef $$selfptr if defined $$selfptr;
+  my $items = $self->{'ITEMS'};
+  if( defined($items) ) {
+    foreach my $k (keys %$items) {
+      $items->{$k} = undef;
+    }
+  }
+  foreach my $k (keys %$self) {
+    $self->{$k} = undef;
+  }
+}
+
+#--------------------------------------------------------------------
+sub DESTROY {
+  my $self = shift;
+  warn "DESTROYING $self" if $DEBUG;
 }
 
 $serial = 1;

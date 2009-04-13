@@ -1,9 +1,7 @@
 package CORBA::MICO::Pixtree;
 require Exporter;
 
-use Gtk 0.7006;
-
-use Gtk 0.7006;
+use Gtk2 '1.140';
 use CORBA::MICO::IREntry;
 
 use strict;
@@ -23,17 +21,18 @@ my $hspacing = 10;
 # Create a 'pixtree' object 
 #--------------------------------------------------------------------
 sub pixtree_create {
-  my $retval = new Gtk::ScrolledWindow(undef,undef); # scrolled for main text
+  my $retval = new Gtk2::ScrolledWindow(undef,undef); # scrolled for main text
   $retval->set_policy( 'automatic', 'automatic' );
 
-  my $drawing = Gtk::DrawingArea->new();               # drawing area widget
+  my $drawing = Gtk2::DrawingArea->new();               # drawing area widget
   $retval->add_with_viewport($drawing);
-  $retval->set_user_data([$drawing, undef]);           # store children
-  $retval->signal_connect('destroy', sub { undef @{$_[0]->get_user_data()}; } );
-  $drawing->signal_connect('expose_event',  \&expose_event_cb, $retval);
+#  $retval->set_user_data([$drawing, undef]);           # store children !!!!
+#  $retval->signal_connect('destroy', sub { undef @{$_[0]->get_user_data()}; });
+  my $pixtree_hnd = [$retval, $drawing, undef];
+  $drawing->signal_connect('expose_event',  \&expose_event_cb, $pixtree_hnd);
 #  $drawing->signal_connect('size_allocate', \&size_allocate_cb, $retval);
   $retval->show_all();
-  return $retval;
+  return $pixtree_hnd;
 }
 
 #--------------------------------------------------------------------
@@ -42,31 +41,36 @@ sub pixtree_create {
 #     \@nodes  - list of interfaces (objects of class CORBA::MICO::IREntry)
 #--------------------------------------------------------------------
 sub pixtree_show {
-  my ($pixtree, $nodes) = @_;
-  my $ud = $pixtree->get_user_data();
-  $ud->[1] = $nodes;
-  $ud->[0]->queue_draw();
+  my ($pixtree_hnd, $nodes) = @_;
+  my $pixtree = $pixtree_hnd->[0];
+  $pixtree_hnd->[2] = $nodes;
+  $pixtree_hnd->[1]->queue_draw();
+}
+
+#--------------------------------------------------------------------
+sub text_size {
+   my ($w, $text) = @_;
+   my $layout = $w->create_pango_layout($text);
+   return $layout->get_pixel_size;
 }
 
 #--------------------------------------------------------------------
 sub expose_event_cb {
-  my ($widget, $pixtree, $event) = @_;
+  my ($widget, $event, $pixtree_hnd) = @_;
   my $window = $widget->window();
+  my $pixtree = $pixtree_hnd->[0];
   return 1 unless $window;
-  my $ud = $pixtree->get_user_data();
-  return 1 unless defined $ud->[1];
-  my $nodes = $ud->[1];
+  return 1 unless defined $pixtree_hnd->[2];
+  my $nodes = $pixtree_hnd->[2];
   my @levels = ();
   my %tree_desc = ();
   prepare_tree($nodes, 0, 0, 1, \@levels, \%tree_desc);
   my ($maxwidth) = reverse sort @levels;
   my $maxitem_w = 0;
   my $maxitem_h = 0;
-  my $font = $widget->get_style()->font();
   foreach my $iname (keys %tree_desc) {
-    my $tw = $font->string_width($iname);
+    my ($tw, $th) = text_size($widget, $iname);
     $maxitem_w = $tw if $maxitem_w < $tw;
-    my $th = $font->text_height($iname, length($iname));
     $maxitem_h = $th if $maxitem_h < $th;
     $tree_desc{$iname}{WIDTH} = $tw;
     $tree_desc{$iname}{HEIGHT} = $th;
@@ -78,7 +82,8 @@ sub expose_event_cb {
   my $full_height = @levels * ($box_h + $vspacing);
   my $curr_hspacing;
   my $curr_vspacing;
-  my ($allocted_w, $allocted_h) = splice(@{$widget->allocation()}, 2, 2);
+  my Gtk2::Gdk::Rectangle $rect = $widget->allocation();
+  my ($allocted_w, $allocted_h) = ($rect->width(), $rect->height());
   if( $allocted_w < $full_width or $allocted_h < $full_height ) {
     $full_width = $allocted_w if $full_width < $allocted_w;
     $full_height = $allocted_h if $full_height < $allocted_h;
@@ -135,7 +140,6 @@ sub draw_lines {
   my $parents = $item_data->{PARENTS} or return;
   my $nparents = @$parents            or return;
   my $x = $item_data->{HPOS};
-#  my $y = $item_data->{VPOS} + $h;
   my $y = $item_data->{VPOS};
   my $dist = ($w - ($nparents*$line_width)) / ($nparents+1); 
   my $style = $widget->get_style();
@@ -144,7 +148,6 @@ sub draw_lines {
   foreach my $parent (@$parents) {
     my $parent_data = $tree_desc->{$parent};
     my $x1 = int($parent_data->{HPOS} + $middle);
-#    my $y1 = $parent_data->{VPOS};
     my $y1 = $parent_data->{VPOS} + $h;
     my $i;
     if( abs($x1-$x0) <= 2 ) {
@@ -165,12 +168,12 @@ sub draw_item {
   my $style = $widget->get_style();
   $pm->draw_rectangle($style->bg_gc('normal'), 1, $x, $y, $w, $h);
   $pm->draw_rectangle($style->fg_gc('normal'), 0, $x, $y, $w, $h);
-  my $font = $widget->get_style()->font();
   my $iw = $item_data->{WIDTH};
   my $ih = $item_data->{HEIGHT};
   my $x1 = $x + int(($w-$iw) / 2);
-  my $y1 = $y + ($h - int(($h-$ih)/2));
-  $pm->draw_string($font, $style->fg_gc('normal'), $x1, $y1, $item_name);
+  my $y1 = $y + int(($h-$ih)/2);
+  my $layout = $widget->create_pango_layout($item_name);
+  $pm->draw_layout($style->fg_gc('normal'), $x1, $y1, $layout);
 }
 
 #--------------------------------------------------------------------

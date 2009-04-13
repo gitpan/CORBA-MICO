@@ -56,11 +56,11 @@ void *get_c_func (char *name)
     
     dSP;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs (sv_2mortal (newSVpv (name, 0)));
     PUTBACK;
     
-    count = perl_call_pv ("DynaLoader::dl_find_symbol_anywhere", 
+    count = call_pv ("DynaLoader::dl_find_symbol_anywhere", 
 			  G_SCALAR | G_EVAL);
     SPAGAIN;
 
@@ -212,8 +212,8 @@ ORB_init (id)
 	RETVAL = CORBA::ORB_instance (id, FALSE);
 	if (!RETVAL) {
 	
-	    ARGV = perl_get_av("ARGV", FALSE);
-	    ARGV0 = perl_get_sv("0", FALSE);
+	    ARGV = get_av("ARGV", FALSE);
+	    ARGV0 = get_sv("0", FALSE);
 
 	    AV* ARGV_copy = newAV();
 	    sv_2mortal((SV*)ARGV_copy);

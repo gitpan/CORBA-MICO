@@ -248,9 +248,10 @@ sequence_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     CORBA::ULong len;
     CORBA::TypeCode_var content_tc = tc->content_type();
 
-    // get length, check type (FIXME: off by one???)
+    // get length, check type
     if (content_tc->kind() == CORBA::tk_octet || 
 	content_tc->kind() == CORBA::tk_char) {
+        SvPVbyte(sv,PL_na);
 	len = SvCUR(sv);
     } else {
 	if (!SvROK(sv) || (SvTYPE(SvRV(sv)) != SVt_PVAV)) {
@@ -373,7 +374,7 @@ union_find_arm (CORBA::TypeCode_ptr tc, SV *discriminator)
 
     CORBA::Long defidx = tc->default_index();
     CORBA::TypeCode_var dtype = tc->discriminator_type();
-    CORBA::TCKind dkind = tc->discriminator_type()->kind();
+    CORBA::TCKind dkind = dtype->kind();
 
     CORBA::Long i = 0;
     bool found = false;
@@ -447,10 +448,7 @@ union_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	    return false;
     }
     
-    if (!res->union_put_end())
-	return false;
-
-    return (newRV_noinc((SV *)av) != 0);
+    return res->union_put_end();
 }
 
 static bool
@@ -484,14 +482,14 @@ string_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 static bool
 longlong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-   *res <<= SvLLV (sv);
+   *res <<= (CORBA::LongLong)SvLLV (sv);
    return true;
 }
 
 static bool
 ulonglong_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 {
-    *res <<= SvULLV (sv);
+    *res <<= (CORBA::ULongLong)SvULLV (sv);
     return true;
 }
 
@@ -520,12 +518,12 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 
     if (!sv_isa (sv, "CORBA::Fixed"))
       {
-	PUSHMARK(sp);
+	PUSHMARK(SP);
 	XPUSHs(sv_2mortal (newSVpv ("CORBA::Fixed", 0)));
 	XPUSHs(sv);
 	PUTBACK;
 
-	count = perl_call_method("from_string", G_SCALAR);
+	count = call_method("from_string", G_SCALAR);
 
 	SPAGAIN;
 	
@@ -535,6 +533,8 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	     (void)POPs;
 
 	   PUTBACK;
+           FREETMPS;
+           LEAVE;
 	   return false;
 	}
 
@@ -543,13 +543,13 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	PUTBACK;
       }
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs(sv);
     XPUSHs(sv_2mortal (newSViv (digits)));
     XPUSHs(sv_2mortal (newSViv (tc->fixed_scale())));
     PUTBACK;
 
-    count = perl_call_method("to_digits", G_SCALAR);
+    count = call_method("to_digits", G_SCALAR);
 
     SPAGAIN;
     
@@ -559,15 +559,18 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
 	(void)POPs;
 
       PUTBACK;
+      FREETMPS;
+      LEAVE;
       return false;
     }
     
     sv = POPs;
+    PUTBACK;
 
     str = SvPV(sv,len);
 
     if (len != (STRLEN)(digits + 1)) {
-      warn ("CORBA::Fixed::to_digits return wrong number of digits!\n");
+      warn ("CORBA::Fixed::to_digits return wrong number of digits(%d)!\n",len);
       return false;
     }
 
@@ -583,6 +586,9 @@ fixed_to_any (CORBA::Any *res, CORBA::TypeCode *tc, SV *sv)
     fixed.from_digits (val);
     
     *res <<= CORBA::Any::from_fixed (fixed, digits, scale);
+
+    FREETMPS;
+    LEAVE;
     return true;
 }
 
@@ -802,28 +808,28 @@ sequence_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
     if (!any->seq_get_begin(len))
 	return NULL;
 
-    // FIXME: Check the length of the typecode
-    
     if (content_tc->kind() == CORBA::tk_octet) {
-	res = newSV(len);
-	SvPOK_only(res);
 	if( len ) {
+	  res = newSV(len);
+          SvPOK_only(res);
 	  CORBA::Octet *buf = (CORBA::Octet *)SvPVX(res);
 	  SvCUR_set(res,len);
 	  for( CORBA::ULong i = 0 ; i < len ; i++ )
 	    if( !(*any >>= CORBA::Any::to_octet(buf[i])) ) goto error;
-	}
-
+	} else {
+          res = newSVpvn( "", 0 );
+        }
     } else if (content_tc->kind() == CORBA::tk_char) {
-	res = newSV(len);
-	SvPOK_only(res);
 	if( len ) {
+          res = newSV(len);
+          SvPOK_only(res);
 	  CORBA::Char *buf = (CORBA::Char *)SvPVX(res);
 	  SvCUR_set(res,len);
 	  for( CORBA::ULong i = 0 ; i < len ; i++ )
 	    if( !(*any >>= CORBA::Any::to_char(buf[i])) ) goto error;
-	}
-
+	} else {
+          res = newSVpvn( "", 0 );
+        }
     } else {
 	AV *av = newAV();
 	av_extend(av, len);
@@ -876,7 +882,7 @@ array_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 static SV *
 except_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 {
-    char *repoid;
+    CORBA::String_var repoid;
     AV *av = NULL;
 
     if (!any->except_get_begin (repoid))
@@ -901,8 +907,7 @@ except_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 
     return pmico_user_except (repoid, newRV_noinc((SV *)av));
 
- error:
-    delete repoid;
+error:
     if (av)
 	av_undef (av);
 
@@ -1060,13 +1065,15 @@ fixed_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 	SvPOK_on(tsv);
 
 	dSP;
-	PUSHMARK(sp);
+        ENTER;
+        SAVETMPS;
+	PUSHMARK(SP);
 	XPUSHs (sv_2mortal (newSVpv ("CORBA::Fixed", 0)));
 	XPUSHs (sv_2mortal (tsv));
 	XPUSHs (sv_2mortal (newSViv(scale)));
 	PUTBACK;
 
-	int count = perl_call_method("new", G_SCALAR);
+	int count = call_method("new", G_SCALAR);
 
 	SPAGAIN;
 	
@@ -1075,12 +1082,17 @@ fixed_from_any (CORBA::Any *any, CORBA::TypeCode *tc)
 	   while (count--)
 	     (void)POPs;
 
+	   PUTBACK;
+           FREETMPS;
+           LEAVE;
 	   return NULL;
 	}
 
 	sv = newSVsv(POPs);
 
 	PUTBACK;
+        FREETMPS;
+        LEAVE;
     }
     
     return sv;

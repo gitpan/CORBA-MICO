@@ -44,7 +44,7 @@ PMicoDispatcherCallback::callback (CORBA::Dispatcher *dispatcher, CORBA::Dispatc
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newSVpv((char *)ev, 0)));
     for (int i=0; i<av_len(_args); i++)
@@ -52,7 +52,7 @@ PMicoDispatcherCallback::callback (CORBA::Dispatcher *dispatcher, CORBA::Dispatc
 
     PUTBACK;
 
-    perl_call_sv(_callback, G_DISCARD);
+    call_sv(_callback, G_DISCARD);
 
     FREETMPS;
     LEAVE;

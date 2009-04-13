@@ -2,7 +2,7 @@ use strict;
 use ExtUtils::MakeMaker;
 use Config;
 
-my @OBJECTS     = qw(MICO.o interfaces.o types.o server.o errors.o exttypes.o dispatcher.o);
+my @OBJECTS     = qw(MICO.o interfaces.o types.o server.o errors.o exttypes.o dispatcher.o util.o);
 my $CC          = "";
 my $CCFLAGS     = "";
 my $DEFINE      = "";
@@ -144,7 +144,7 @@ else {
        $MICOLIBS .= " -R$MICOPREFIX/lib";
     }
     if( $Config{'osname'} eq "aix" ) {
-       $MICOLIBS .= " -lm";
+       $MICOLIBS .= ' -lC_r -lm';
     }
     
     # compiler option specific

@@ -1,6 +1,10 @@
+const long BGLN = 250;
+
 module Bank {
 
   const long DAILY_MAX = 1000;
+
+  typedef sequence<octet> octetString;
 
   typedef char Face[6][10];
   typedef fixed<16,2> Amount;
@@ -50,7 +54,7 @@ module Bank {
     AcctCounter counter();
     void server_exit ();
 
-    void set_new_get_old( inout string smth );
+    void set_new_get_old( inout octetString smth );
 
     // DynamicAny test
     enum da_enum {

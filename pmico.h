@@ -107,8 +107,11 @@ SV *		  pmico_dyn_any_to_sv	 (DynamicAny::DynAny *dynany);
 const char* const TCKind_to_str( CORBA::TCKind kind );
 
 //-------------------------------------------------------------------
-#ifdef CORBAMICO_DEBUG
-#define CM_DEBUG(v)	printf v
-#else
-#define CM_DEBUG(v)
-#endif
+void cm_log( const char* format, ... );
+#define CM_DEBUG(v)	cm_log v
+
+//-------------------------------------------------------------------
+/*!
+ * mutex to serialize servant calls from MICO
+ */
+extern MICOMT::Mutex cmPerlEntryLock;

@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-use CORBA::MICO ids => [ 'IDL:Bank:1.0' => undef ];
+use CORBA::MICO ids => [ 'IDL:Bank:1.0' => undef, 'IDL:BGLN:1.0' => undef ];
 use Error qw(:try);
 
 use strict;
@@ -18,6 +18,8 @@ if( CORBA::is_nil($ir) ) {
   exit 1;
 }
 
+print "BGLN=", ::BGLN(), "\n";
+
 open IOR, "account.ref";
 my $ior = <IOR>;
 close IOR;
@@ -30,16 +32,33 @@ my $account = $orb->string_to_object($ior);
 
 #print "$$\n";
 #sleep 5;
+#read STDIN,$a,1;
 
 for (my $i=0;$i<0;$i++) {
     $account->deposit( 1 );
 }
+my $fixed_100 = new CORBA::Fixed("+00000000000100", 0);
+my $fixed_123 = new CORBA::Fixed("123000", 3);
+print "100=$fixed_100\n";
+print "100 as digits(16,2)=",$fixed_100->to_digits(16,2),"\n";
+print "123=$fixed_123\n";
+my $fixed_223 = CORBA::Fixed::add( $fixed_123, $fixed_100 );
+print "223=$fixed_223\n";
+print "223 as digits(16,2)=",$fixed_223->to_digits(16,2),"\n";
+
+print "Balance is ".$account->balance."\n";
+$account->deposit( $fixed_100 );
+print "Balance is ".$account->balance."\n";
 $account->deposit( 100 );
+print "Balance is ".$account->balance."\n";
 $account->deposit( 100 );
+print "Balance is ".$account->balance."\n";
 $account->deposit( 100 );
+print "Balance is ".$account->balance."\n";
 $account->deposit( 100 );
-$account->deposit( 100 );
+print "Balance is ".$account->balance."\n";
 $account->withdraw( 240 );
+print "Balance is ".$account->balance."\n";
 $account->withdraw( 10 );
 
 print "Balance is ".$account->balance."\n";

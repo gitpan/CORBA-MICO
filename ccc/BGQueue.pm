@@ -3,9 +3,13 @@ package CORBA::MICO::BGQueue;
 #--------------------------------------------------------------------
 # Queue for background processing
 #--------------------------------------------------------------------
-use Gtk 0.7006;
+use Gtk2 '1.140';
+use Carp;
 
 use strict;
+
+use vars qw($DEBUG);
+#$DEBUG=1;
 
 #--------------------------------------------------------------------
 # Create new queue
@@ -23,8 +27,18 @@ sub new {
 }
 
 #--------------------------------------------------------------------
+sub close {
+  my $self = shift;
+  $self->deactivate();
+  foreach my $k (keys %$self) {
+    $self->{$k} = undef;
+  }
+}
+
+#--------------------------------------------------------------------
 sub DESTROY {
   my $self = shift;
+  carp "DESTROYING $self" if $DEBUG;
   $self->deactivate();
 }
 
@@ -35,7 +49,8 @@ sub activate {
   my $self = shift;
   if( not defined($self->{'TAG'}) ) {
     my $interval = $self->{'INTERVAL'};
-    $self->{'TAG'} = Gtk->timeout_add($interval, \&timeout_hnd, $self);
+    $interval = 20 if  $interval == 0;
+    $self->{'TAG'} = Glib::Timeout->add($interval, \&timeout_hnd, $self);
   }
 }
 
@@ -44,8 +59,9 @@ sub activate {
 #--------------------------------------------------------------------
 sub deactivate {
   my $self = shift;
+  warn  "deactivate" if $DEBUG;
   if( defined($self->{'TAG'}) ) {
-    Gtk->timeout_remove($self->{'TAG'});
+    Glib::Source->remove($self->{'TAG'});
   }
   $self->{'TAG'} = undef;
 }

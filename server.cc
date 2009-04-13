@@ -111,11 +111,11 @@ pmico_get_repoid (SV *perlobj)
     char *result;
     
     dSP;
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs(perlobj);
     PUTBACK;
     
-    int count = perl_call_method("_pmico_repoid", G_SCALAR);
+    int count = call_method("_pmico_repoid", G_SCALAR);
     SPAGAIN;
     
     if (count != 1)			/* sanity check */
@@ -134,11 +134,11 @@ pmico_get_mico_servant (SV *perlobj)
     PortableServer::Servant result;
 
     dSP;
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs(perlobj);
     PUTBACK;
 	
-    int count = perl_call_method("_pmico_servant", G_SCALAR);
+    int count = call_method("_pmico_servant", G_SCALAR);
     SPAGAIN;
     
     if (count != 1)			/* sanity check */
@@ -182,17 +182,17 @@ pmico_sv_to_servant    (SV *perlobj)
 
 static CORBA::Exception *
 pmico_encode_exception (const char *               name, 
-			SV *                       perl_except,
+			SV *                       perlexception,
 			CORBA::ExcDescriptionSeq  *exceptions) 
 {
     dSP;
 
-    PUSHMARK (sp);
-    XPUSHs (perl_except);
+    PUSHMARK (SP);
+    XPUSHs (perlexception);
     PUTBACK;
 
     CM_DEBUG(("pmico_encode_exception(name='%s')\n",name));
-    int count = perl_call_method("_repoid", G_SCALAR | G_EVAL);
+    int count = call_method("_repoid", G_SCALAR | G_EVAL);
     SPAGAIN;
     
     if (SvTRUE(ERRSV) || count != 1) {
@@ -209,18 +209,18 @@ pmico_encode_exception (const char *               name,
     PUTBACK;
     CM_DEBUG(("pmico_encode_exception():repoid='%s'\n",repoid));
 
-    if (sv_derived_from (perl_except, "CORBA::SystemException")) {
+    if (sv_derived_from (perlexception, "CORBA::SystemException")) {
         CM_DEBUG(("pmico_encode_exception():repoid='%s' CORBA::SystemException\n",repoid));
 
 	SV **svp;
 
-	if (!SvROK(perl_except) || (SvTYPE(SvRV(perl_except)) != SVt_PVHV)) {
+	if (!SvROK(perlexception) || (SvTYPE(SvRV(perlexception)) != SVt_PVHV)) {
 	    warn("panic: exception not a hash reference");
 	    return new CORBA::UNKNOWN (0, CORBA::COMPLETED_MAYBE);
 	}
 
 	CORBA::CompletionStatus status;
-	svp = hv_fetch((HV *)SvRV(perl_except), "-status", 7, 0);
+	svp = hv_fetch((HV *)SvRV(perlexception), "-status", 7, 0);
 	if (svp) {
 	    char *cstr = SvPV(*svp, PL_na);
 
@@ -240,7 +240,7 @@ pmico_encode_exception (const char *               name,
 	    status = CORBA::COMPLETED_MAYBE;
 
 	CORBA::ULong minor;
-	svp = hv_fetch((HV *)SvRV(perl_except), "-minor", 6, 0);
+	svp = hv_fetch((HV *)SvRV(perlexception), "-minor", 6, 0);
 	if (svp)
 	    minor = (CORBA::ULong)SvNV(*svp);
 	else
@@ -248,7 +248,7 @@ pmico_encode_exception (const char *               name,
 	
 	return CORBA::SystemException::_create_sysex(repoid, minor, status);
 	
-    } else if (sv_derived_from (perl_except, "CORBA::UserException")) {
+    } else if (sv_derived_from (perlexception, "CORBA::UserException")) {
         CM_DEBUG(("pmico_encode_exception():repoid='%s' CORBA::UserException\n",repoid));
 	
 	if (exceptions) {
@@ -258,7 +258,7 @@ pmico_encode_exception (const char *               name,
 		    
 		    CORBA::Any *any = new CORBA::Any;
 		    any->set_type ((*exceptions)[i].type);
-		    if (pmico_to_any (any, perl_except))
+		    if (pmico_to_any (any, perlexception))
 			return new CORBA::UnknownUserException (any);
 		    else {
 			warn ("Error creating exception object for '%s'", repoid);
@@ -285,7 +285,7 @@ pmico_call_method (const char *name, int return_items, CORBA::ExcDescriptionSeq 
 
     sv_setsv (GvSV(throwngv), &PL_sv_undef);
 
-    int return_count = perl_call_method ((char *)name, G_EVAL |
+    int return_count = call_method ((char *)name, G_EVAL |
 					 ((return_items == 0) ? G_VOID :
 					  ((return_items == 1) ? G_SCALAR : G_ARRAY)));
 
@@ -309,7 +309,7 @@ pmico_call_method (const char *name, int return_items, CORBA::ExcDescriptionSeq 
     /* Even when we specify G_VOID we may still get a response if the user
        didn't return with 'return;'! */
     if (return_items && return_count != return_items) {
-	warn("Implementation of '%s' should return %d items", name, return_items);
+	warn("Implementation of '%s' should return %d items, not %d", name, return_items, return_count);
 	return CORBA::SystemException::_create_sysex("IDL:omg.org/CORBA/MARSHAL:1.0", 
 						     0, CORBA::COMPLETED_YES);
     }
@@ -383,7 +383,7 @@ PMicoAdapterActivator::unknown_adapter (PortableServer::POA_ptr parent,
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     SV *tmp = sv_newmortal();
@@ -417,7 +417,7 @@ PMicoServantActivator::PMicoServantActivator(SV *_perlobj)
 {
     assert (SvROK(_perlobj));
 
-    this->thx = PERL_GET_THX;
+    this->thx = (PerlInterpreter*)PERL_GET_THX;
     this->perlobj = SvRV(_perlobj);
 }
 
@@ -430,13 +430,16 @@ PMicoServantActivator::incarnate (const PortableServer::ObjectId& oid,
 
     init_forward_request();
     
+    // only one thread into Perl
+    MICOMT::AutoLock l(cmPerlEntryLock);
+
     PERL_SET_CONTEXT(this->thx);
     dSP;
 
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     
@@ -475,13 +478,17 @@ PMicoServantActivator::etherealize (const PortableServer::ObjectId& oid,
 				    CORBA::Boolean                  remaining_activations)
 {
     CORBA::Exception *exception;
+
+    // only one thread into Perl
+    MICOMT::AutoLock l(cmPerlEntryLock);
+
     PERL_SET_CONTEXT(this->thx);
     dSP;
 
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     
@@ -521,7 +528,7 @@ PMicoServantLocator::preinvoke (const PortableServer::ObjectId& oid,
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     
@@ -570,7 +577,7 @@ PMicoServantLocator::postinvoke (const PortableServer::ObjectId& oid,
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
     
@@ -605,7 +612,7 @@ PMicoServant::PMicoServant (SV *_perlobj)
 {
     assert (SvROK(_perlobj));
 
-    this->thx = PERL_GET_THX;
+    this->thx = (PerlInterpreter*)PERL_GET_THX;
     std::string repoid = pmico_get_repoid (_perlobj);
     PMicoIfaceInfo *info = pmico_find_interface_description (repoid.c_str());
     
@@ -747,6 +754,9 @@ PMicoServant::builtin_invoke (CORBA::ServerRequest_ptr svreq)
 void    
 PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 {
+    // only one thread into Perl
+    MICOMT::AutoLock l(cmPerlEntryLock);
+    
     PERL_SET_CONTEXT(this->thx);
     dSP;
 
@@ -786,7 +796,7 @@ PMicoServant::invoke ( CORBA::ServerRequest_ptr _req )
 
     _req->params (args);
 
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newRV_inc(perlobj)));
 

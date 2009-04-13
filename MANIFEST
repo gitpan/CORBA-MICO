@@ -33,12 +33,12 @@ gtkmico.cc
 gtkmico.h
 interfaces.cc
 opponent.xpm
-perl-idl
 pmico.h
 self.xpm
 server
 server.cc
 server.h
+util.cc
 shlib/Makefile
 shlib/hello
 shlib/hello.idl
@@ -67,4 +67,7 @@ ccc/plans.txt
 examples/objecttest
 examples/pingo
 examples/states
+examples/mt1.idl
+examples/mt1client
+examples/mt1server
 META.yml                                 Module meta-data (added by MakeMaker)

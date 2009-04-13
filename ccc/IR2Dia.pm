@@ -1,8 +1,10 @@
 package CORBA::MICO::IR2Dia;
 require Exporter;
 
-use Gtk 0.7006;
+use Gtk2 '1.140';
+require CORBA::MICO::Misc;
 use CORBA::MICO::Pixtree;
+
 use Symbol ();
 
 use strict;
@@ -27,7 +29,7 @@ sub dump_interface {
   return _dump_interface($fh, $nodes) if ref($fh);
   my $hnd = Symbol::gensym();
   unless( open($hnd, ">$fh") ) {
-    Misc::warning(qq/Can't open "$fh": $!/);
+    CORBA::MICO::Misc::warning(qq/Can't open "$fh": $!/);
     return 0;
   }
   my $retval = _dump_interface($hnd, $nodes);

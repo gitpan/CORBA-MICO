@@ -10,7 +10,7 @@ package CORBA::MICO::NC;
 #   activate     - callback will be called each time objects window
 #                  becomes active
 #--------------------------------------------------------------------
-use Gtk 0.7006;
+use Gtk2 '1.140';
 use CORBA::MICO;
 use CORBA::MICO::NCEntry;
 use CORBA::MICO::NCRoot;
@@ -21,7 +21,14 @@ use CORBA::MICO::IR;
 use CORBA::MICO::Misc qw(status_line_create status_line_write);
 
 use strict;
+
+use constant TREE_TITLE_COLUMN => 0;
+use constant TREE_UDATA_COLUMN => 1;
+
 use vars qw($serial $menu_item_IDL $menu_item_iheritance $menu_item_DIA);
+
+use vars qw($DEBUG);
+#$DEBUG=1;
 
 #--------------------------------------------------------------------
 # Create new NS browser object
@@ -99,7 +106,10 @@ sub do_iteration {
     status_line_write($status_line, "NS: Background processing completed");
     return 0;                           # Remove handler if queue is empty
   }
-  my $ud = $ctree->node_get_row_data($node);
+  my $model = $self->{'MODEL'};
+  my ($desc, $ud) = $model->get($node, 
+                                TREE_TITLE_COLUMN,
+                                TREE_UDATA_COLUMN);
   my $contents = $ud->[1];              # NC node children
   return 1 unless defined $contents;    # Do nothing if no children
   if( @$contents == 0 ) {
@@ -113,7 +123,8 @@ sub do_iteration {
   }
   # process a child
   my $child = shift @$contents;
-  my $chname = $child->shname();
+  #my $chname = $child->shname();
+  my $chname = $child->name();
   status_line_write($status_line, "NS: $chname...");
   my $bnode = create_node($ctree, $node, $child, $chname, $queue, $self);
   push(@$queue, $node);                 # Push node to the end of queue
@@ -144,7 +155,7 @@ sub init_browser {
   my ($self, $orb, 
       $root_nc, $ir_browser, $topwindow, $sline, $bg_sched, $menu) = @_;
   # Main vertical box: pane
-  my $vbox = new Gtk::VBox;
+  my $vbox = new Gtk2::VBox;
 
   # Menu
   my $menu_id = "NC_$serial"; ++$serial;
@@ -156,29 +167,36 @@ sub init_browser {
                             undef, \&export_to_DIA_cb, $self);
 
   # Paned window: left-tree, right-text
-  my $paned = new Gtk::HPaned;
+  my $paned = new Gtk2::HPaned;
   $vbox->pack_start($paned, 1, 1, 0);
   $vbox->show_all();
 
   # Create scrolled window for CTree
-  my $scrolled = new Gtk::ScrolledWindow(undef,undef);
+  my $scrolled = new Gtk2::ScrolledWindow(undef,undef);
   $scrolled->set_policy( 'automatic', 'automatic' );
   $paned->add($scrolled);
 
-  # Create ctree widget
-  my @tree_titles = ();
-  my $ctree;
-  if( $#tree_titles >= 0 ) { 
-    $ctree = new_with_titles Gtk::CTree(0, @tree_titles);
-  }
-  else {
-    $ctree = new Gtk::CTree(1, 0);
-  }
-  $ctree->set_column_auto_resize(0, 1);
+  # Create ctree widget (use Gtk2::TreeView instead of Gtk::CTree)
+  my $model = Gtk2::TreeStore->new('Glib::String', 'Glib::Scalar');
+  my $ctree = Gtk2::TreeView->new;
+  $ctree->set_model($model);
+  my $selection = $ctree->get_selection;
+  $selection->set_mode ('browse');
+  my $cell = Gtk2::CellRendererText->new;
+  my $column = Gtk2::TreeViewColumn->new_with_attributes('',
+                              $cell, 'text' => TREE_TITLE_COLUMN);
+  $ctree->append_column($column);
+  # disable incremental search
+  $ctree->set_enable_search(0);
+  # and use popup search via CTRL_F/CTRL_R
+  $ctree->signal_connect(
+                 key_press_event => \&CORBA::MICO::Misc::ctree_kpress, $self);
+  # search by regexp
+  $ctree->set_search_equal_func(\&CORBA::MICO::Misc::ctree_std_search, $self);
   $scrolled->add($ctree);
 
   # Paned window: hypertext on the top, IOR on the left
-  my $paned1 = new Gtk::VPaned;
+  my $paned1 = new Gtk2::VPaned;
   $paned->add2($paned1);
 
   # Create text window for IDL-representation of selected items
@@ -186,7 +204,11 @@ sub init_browser {
   $paned1->add($text);
 
   # Text widget for IOR
-  my $ior_widget = new Gtk::Text;
+  my $ior_widget = Gtk2::TextView->new;
+  $ior_widget->set_wrap_mode ('char');
+  $ior_widget->set_editable(0);
+  $ior_widget->set_cursor_visible(0);
+
   $paned1->add2($ior_widget);
   $paned1->set_position(400);
 
@@ -195,9 +217,10 @@ sub init_browser {
   $paned->show();
   $bg_sched->add_entry($self);
   $ctree->signal_connect('destroy', sub { $bg_sched->remove_entry($self); 1; });
-  $ctree->signal_connect('tree_select_row',   \&row_selected, $self);
-  $ctree->signal_connect('tree_unselect_row', \&row_unselected, $self);
-  $ctree->signal_connect('tree_expand', \&row_expanded, $self);
+  $selection->signal_connect(changed => \&row_selected, $self);
+  $ctree->signal_connect(row_expanded => \&row_expanded, $self);
+  $ctree->signal_connect(row_activated => \&row_activated, $self);
+
   $self->{'ORB'}        = $orb;          # ORB
   $self->{'TOPWINDOW'}  = $topwindow;    # toplevel window
   $self->{'SLINE'}      = $sline;        # status line
@@ -207,12 +230,13 @@ sub init_browser {
   $self->{'ROOT'}       = $root_nc;      # NCRoot
   $self->{'CTREE'}      = $ctree;        # CTree widget
   $self->{'NODE'}       = undef;         # current (selected) row 
+  $self->{'MODEL'}      = $model;        # tree model
   $self->{'WIDGET'}     = $vbox;         # main window
   $self->{'IR_BROWSER'} = $ir_browser;   # global IR browser object
   $self->{'IOR_WIDGET'} = $ior_widget;   # widget for IOR
   $self->{'IR_ITEMS'}   = {};            # hash -> IR object name => IR object
   $self->{'BG_QUEUE'}   = [];            # queue for background processing
-  $self->{'ROOT_PREPARED'}  = 0;        # root node is not prepared yet
+  $self->{'ROOT_PREPARED'}  = 0;         # root node is not prepared yet
 }                         
 
 #--------------------------------------------------------------------
@@ -272,7 +296,6 @@ sub create_subtree {
 #    rowdata - raw data to be attached to the node
 sub add_tree_node {
   my($self, $ctree, $parent, $desc, $is_leaf, $rowdata) = @_;
-  my $pixmaps = CORBA::MICO::Misc::ctree_pixmaps($self->{'TOPWINDOW'});
   if( not defined($ctree) ) {
     # Add to buffered area - not really to Ctree
     my %node = ( 'DESC'     => $desc,
@@ -283,44 +306,50 @@ sub add_tree_node {
     return \%node;
   }
   # ctree defined -> add directly to the tree
-  my $ret = $ctree->insert_node($parent, undef, 
-           [$desc],
-           5,
-           $is_leaf ? $pixmaps->{'LEAF'}      : $pixmaps->{'CLOSED'},
-           $is_leaf ? $pixmaps->{'LEAF_MASK'} : $pixmaps->{'CLOSED_MASK'},
-           $is_leaf ? undef                   : $pixmaps->{'OPEN'},
-           $is_leaf ? undef                   : $pixmaps->{'OPEN_MASK'},
-           $is_leaf,
-           0
-           );
-  if( defined($rowdata) ) {
-    $ctree->node_set_row_data($ret, $rowdata);
-  }
-  else {
-    $ctree->node_set_selectable($ret, 0);
-  }
+  my $model = $self->{MODEL};
+  my $ret = $model->append($parent);
+  $model->set($ret,
+              TREE_TITLE_COLUMN,  $desc,
+              TREE_UDATA_COLUMN, $rowdata);
   return $ret;
 }
 
 #--------------------------------------------------------------------
+# Signal handler: CTree row activated: just show IDL
+# args: $ctree, $iter, $path, $column, $self
+#--------------------------------------------------------------------
+sub row_activated {
+  my ($ctree, $path, $column, $self) = @_;
+  show_IDL_cb($self);
+}
+
+#--------------------------------------------------------------------
 # Signal handler: CTree row selected
-# args: ctree, self, tree node
+# args: $selection, $self
 #--------------------------------------------------------------------
 sub row_selected {
-  my ($ctree, $self, $row) = @_;
-  $self->{'NODE'} = $row;
+  my ($selection, $self) = @_;
+  my $iter = $selection->get_selected();
+  $self->{'NODE'} = $iter;
   $self->mask_menu();
-  my $ud = $ctree->node_get_row_data($row);
+  return unless defined($iter);
+  my $model = $self->{'MODEL'};
+  my ($desc, $ud) = $model->get($iter,
+                                TREE_TITLE_COLUMN,
+                                TREE_UDATA_COLUMN);
   my $nc_node = $ud->[0];
+  #return unless defined $nc_node;
   my $ior = $self->{'ORB'}->object_to_string($nc_node->nc_node());
+ # my $ior = $self->{'ORB'}->object_to_string($nc_node->nc_node()) . "\n\n" .
+ #           $nc_node->locurl() . "\n" . $nc_node->url();
   my $ior_widget = $self->{'IOR_WIDGET'};
-  $ior_widget->set_point(0);
-  $ior_widget->insert(undef, undef, undef, $ior);
+  my $textbuf = $ior_widget->get_buffer();
+  $textbuf->set_text($ior);
 }
 
 #--------------------------------------------------------------------
 # Signal handler: CTree row unselected
-# args: ctree, self, tree node
+# args: $ctree, $self
 #--------------------------------------------------------------------
 sub row_unselected {
   my ($ctree, $self) = @_;
@@ -329,15 +358,16 @@ sub row_unselected {
   my $ior_widget = $self->{'IOR_WIDGET'};
   $ior_widget->set_point(0);
   $ior_widget->forward_delete($ior_widget->get_length());
+  CORBA::MICO::Hypertext::hypertext_show($self->{'TEXT'}, undef);
 }
 
 #--------------------------------------------------------------------
 # Signal handler: CTree row is to be expanded
-# args: ctree, tree node
+# args: $ctree, $iter, $path, $self
 #--------------------------------------------------------------------
 sub row_expanded {
-  my ($ctree, $self, $node) = @_;
-  return expand_row($self, $node);
+  my ($ctree, $iter, $path, $self) = @_;
+  return expand_row($self, $iter);
 }
 
 #--------------------------------------------------------------------
@@ -363,7 +393,10 @@ sub expand_row {
   my $ctree = $self->{'CTREE'};
   my $queue = $self->{'BG_QUEUE'};
   my $topwindow = $self->{'TOPWINDOW'};
-  my $ud = $ctree->node_get_row_data($node);
+  my $model = $self->{'MODEL'};
+  my ($desc, $ud) = $model->get($node,
+                                TREE_TITLE_COLUMN,
+                                TREE_UDATA_COLUMN);
   my $contents = $ud->[1];
   my $buffered = $ud->[2];
   return 1 unless defined($contents) or defined($buffered);
@@ -402,7 +435,10 @@ sub call_menu_callback {
   my $topwindow = $self->{'TOPWINDOW'};
   my $selected_node = $self->{'NODE'};
   return unless defined($selected_node);
-  my $ud = $ctree->node_get_row_data($selected_node);
+  my $model = $self->{'MODEL'};
+  my ($desc, $ud) = $model->get($selected_node,
+                                TREE_TITLE_COLUMN,
+                                TREE_UDATA_COLUMN);
   my $nc_node = $ud->[0];
   return unless defined $nc_node;
   my $name = $nc_node->name();
@@ -421,6 +457,17 @@ sub show_IDL_cb {
            sub {        # show IDL
              my ($self, $name, $nc_node) = @_;
              my $repoid = $nc_node->nc_node()->_repoid();
+             print "REF: ", ref($nc_node->nc_node()), "\n";
+             #my $iface = $nc_node->nc_node()->_get_interface();
+             #print "IFACE: ", ref($iface), "\n";
+             #my $deasc = $iface->describe_interface();
+             #print "IF ID: $desc->{id}, NAME: $desc->{name}\n";
+             #print "IF ID: $iface->{id}, NAME: $iface->{name}\n";
+             unless($repoid) {
+               status_line_write($self->{'SLINE'}, "** Can't get repoid **");
+               sleep(1);
+               return;
+             }
              $self->{'IR_BROWSER'}->show_IDL_by_id($repoid, $self->{'TEXT'});
            }
   );
@@ -462,12 +509,15 @@ sub export_to_DIA_cb {
 # Enable/disable menu choices according to type of selected IR object
 sub mask_menu {
   my $self = shift; 
-  my ($idl_ok, $inher_ok) = (1, 1);
+  my ($idl_ok, $inher_ok) = (0, 0);
   my $selected_node = $self->{'NODE'};
   my $ctree = $self->{'CTREE'};
+  my $model = $self->{'MODEL'};
   my $menu = $self->{'MENU'};
   if( defined($selected_node) ) {
-    my $ud = $ctree->node_get_row_data($selected_node);
+   my ($desc, $ud) = $model->get($selected_node, 
+                                 TREE_TITLE_COLUMN,
+                                 TREE_UDATA_COLUMN);
     my $nc_node = $ud->[0];
     if( defined($nc_node) ) {
       my $kind = $nc_node->kind();
@@ -482,8 +532,22 @@ sub mask_menu {
   $menu->mask_item($menu_item_DIA, $inher_ok);
 }
 
+#--------------------------------------------------------------------
+sub close {
+  my $self = shift;
+  foreach my $k (keys %$self) {
+    $self->{$k} = undef;
+  }
+}
+
+#--------------------------------------------------------------------
+sub DESTROY {
+  my $self = shift;
+  warn "DESTROYING $self" if $DEBUG;
+}
+
 $serial = 0;
 $menu_item_IDL = '/Selected/_IDL';
-$menu_item_iheritance = '/Selected/_Inheritance';
+$menu_item_iheritance = '/Selected/I_nheritance';
 $menu_item_DIA = '/Selected/_Export to DIA';
 1;

@@ -26,18 +26,22 @@ public:
     virtual CORBA::RepositoryId _primary_interface (const PortableServer::ObjectId &, PortableServer::POA_ptr);
     
 private:
-    bool PMicoServant::builtin_invoke (CORBA::ServerRequest_ptr svreq);
+    bool builtin_invoke (CORBA::ServerRequest_ptr svreq);
 
-    CORBA::OperationDescription *find_operation (CORBA::InterfaceDef::FullInterfaceDescription *d, 
-						 const char  *name);
-    CORBA::AttributeDescription *find_attribute (CORBA::InterfaceDef::FullInterfaceDescription *d, 
-						 const char  *name, 
-						 bool         set);
-    CORBA::NVList_ptr  PMicoServant::build_args (const char  *name, 
-						 int         &return_items,
-						 CORBA::TypeCode *&return_type,
-						 int         &inout_items,
-						 CORBA::ExcDescriptionSeq  *&exceptions);
+    CORBA::OperationDescription *find_operation(
+	CORBA::InterfaceDef::FullInterfaceDescription *d, 
+	const char  *name);
+    CORBA::AttributeDescription *find_attribute(
+	CORBA::InterfaceDef::FullInterfaceDescription *d, 
+	const char  *name, 
+	bool         set);
+    CORBA::NVList_ptr build_args(
+	const char  *name, 
+	int         &return_items,
+	CORBA::TypeCode *&return_type,
+	int         &inout_items,
+	CORBA::ExcDescriptionSeq  *&exceptions);
+
     PerlInterpreter* thx;	//! Perl context
     SV *perlobj;
     CORBA::InterfaceDef::FullInterfaceDescription *desc;

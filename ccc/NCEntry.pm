@@ -9,13 +9,14 @@ use strict;
 
 #--------------------------------------------------------------------
 sub new {
-  my ($type, $name, $nc_node, $root_node, $kind) = @_;
+  my ($type, $name, $nc_node, $root_node, $kind, $parent) = @_;
   my $class = ref($type) || $type;
   return bless { 'CONTENTS' => undef,
                  'NAME'     => $name,
                  'ROOT'     => $root_node,
                  'KIND'     => $kind || 'ncontext',
-                 'NODE'     => $nc_node }, $class;
+                 'NODE'     => $nc_node,
+                 'PARENT'   => $parent }, $class;
 }
 
 #--------------------------------------------------------------------
@@ -59,7 +60,8 @@ sub contents {
             my $node = $nc->resolve($binding->{binding_name});
             my $root_node = $self->root_nc();
             my $type = $binding->{binding_type};
-            my $entry = new CORBA::MICO::NCEntry($name, $node, $root_node, $type);
+            my $entry = new CORBA::MICO::NCEntry($name, $node,
+                                                 $root_node, $type, $self);
             push(@$contents, $entry);
           }
         }
@@ -81,6 +83,42 @@ sub is_ncontext {
   my ($self) = @_;
   my $kind = $self->{'KIND'};
   return ($kind eq 'ncontext');
+}
+
+#--------------------------------------------------------------------
+sub full_name {
+  my ($self) = @_;
+  my $parent = $self->{'PARENT'};
+  my $ret = (defined($parent) ? $parent->full_name() : "");
+  return $self->{NAME} ? ($ret . "/$self->{NAME}") : $ret;
+}
+
+#--------------------------------------------------------------------
+sub locurl {
+  my ($self) = @_;
+  return call_nsadmin("locurl " . $self->full_name());
+}
+
+#--------------------------------------------------------------------
+sub url {
+  my ($self) = @_;
+  return call_nsadmin("url " . $self->full_name());
+}
+
+#--------------------------------------------------------------------
+sub iordump {
+  my ($self) = @_;
+  return call_nsadmin("iordump " . $self->full_name());
+}
+
+#--------------------------------------------------------------------
+sub call_nsadmin {
+  my ($cmd) = @_;
+  open CMD, "nsadmin $cmd|" or return "";
+  my $of = select(CMD); undef $/; select($of);
+  my $ret = <CMD>;
+  close CMD;
+  return $ret;
 }
 
 #--------------------------------------------------------------------

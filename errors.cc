@@ -209,21 +209,14 @@ pmico_throw (SV *e)
 {
     dSP;
 
-    SAVETMPS;
-    
-    PUSHMARK(sp);
+    PUSHMARK(SP);
     XPUSHs(sv_2mortal(e));
     PUTBACK;
   
-    perl_call_pv("Error::throw", G_DISCARD);
+    call_pv("Error::throw", G_DISCARD);
     
     fprintf(stderr,"panic: Exception throw returned!");
     exit(1);
-    
-    SPAGAIN;
-    
-    FREETMPS;
-    LEAVE;
 }
 
 const char *
@@ -258,11 +251,11 @@ pmico_setup_exception (const char *repoid, const char *pkg,
        return;
 
    varname = std::string ( pkg ) + "::_repoid";
-   sv = perl_get_sv ((char *)varname.c_str(), TRUE);
+   sv = get_sv ((char *)varname.c_str(), TRUE);
    sv_setsv (sv, newSVpv((char *)repoid, 0));
 
    varname = std::string ( pkg ) + "::ISA";
-   AV *av = perl_get_av ((char *)varname.c_str(), TRUE);
+   AV *av = get_av ((char *)varname.c_str(), TRUE);
    av_push (av, newSVpv((char *)parent, 0));
 
    hv_store (exceptions_hv, (char *)repoid, strlen(repoid), 
@@ -312,7 +305,10 @@ pmico_system_except (const char *repoid, CORBA::ULong minor,
 	text = system_exceptions[0].text;
     }
 
-    PUSHMARK(sp);
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
     XPUSHs(sv_2mortal(newSVpv(pkg, 0)));
 
     XPUSHs(sv_2mortal(newSVpv("-text", 0)));
@@ -342,20 +338,18 @@ pmico_system_except (const char *repoid, CORBA::ULong minor,
     XPUSHs(sv_2mortal(newSVpv(status_str, 0)));
     
     PUTBACK;
-    int count = perl_call_method("new", G_SCALAR);
+    int count = call_method("new", G_SCALAR);
     SPAGAIN;
     
-    if (count != 1) {
-	while (count--)
-	    (void)POPs;
-	PUTBACK;
+    if (count != 1)
 	croak("Exception constructor returned wrong number of items");
-    }
     
-    SV *sv = POPs;
+    SV *sv = newSVsv( POPs );
     PUTBACK;
+    FREETMPS;
+    LEAVE;
 
-    return newSVsv(sv);
+    return sv;
 }
 
 
@@ -374,7 +368,10 @@ pmico_user_except (const char *repoid, SV *value)
 	return 	pmico_system_except ( "IDL:omg.org/CORBA/UNKNOWN:1.0", 
 				      0, CORBA::COMPLETED_MAYBE );
 
-    PUSHMARK(sp);
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
 
     XPUSHs(sv_2mortal(newSVpv((char *)pkg, 0)));
 
@@ -383,20 +380,18 @@ pmico_user_except (const char *repoid, SV *value)
     }
 
     PUTBACK;
-    int count = perl_call_method("new", G_SCALAR);
+    int count = call_method("new", G_SCALAR);
     SPAGAIN;
     
-    if (count != 1) {
-	while (count--)
-	    (void)POPs;
-	PUTBACK;
+    if (count != 1)
 	croak("Exception constructor returned wrong number of items");
-    }
     
-    SV *sv = POPs;
+    SV *sv = newSVsv( POPs );
     PUTBACK;
+    FREETMPS;
+    LEAVE;
     
-    return newSVsv(sv);
+    return sv;
 }
 
 SV *

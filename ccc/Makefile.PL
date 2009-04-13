@@ -1,16 +1,16 @@
 use ExtUtils::MakeMaker;
 
-$gtk_cflags = `gtk-config --cflags`;
-undef $gtk_cflags if $?;
-
-if (defined $gtk_cflags) {
-  WriteMakefile(
+eval {
+    WriteMakefile(
       'NAME'	=> 'CORBA::MICO::ccc',
       'EXE_FILES' => [ 'ccc' ],
       'PREREQ_PM' => {
-	 Gtk => 0.7006, 
+	 Gtk2 => 1.140, 
       },
+      'PREREQ_FATAL' => 1,
   );
-} else {
-  ExtUtils::MakeMaker::WriteEmptyMakefile();
+};
+if( $@ ) {
+    print "$@\nSkip 'ccc' building.\n";
+    ExtUtils::MakeMaker::WriteEmptyMakefile();
 }
